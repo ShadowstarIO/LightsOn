@@ -16,7 +16,7 @@ Never a headcount. Never a ranking. Show report counts and age only.
 
 Happening outranks wrapped-up when both are still fresh. A plugin that just scanned 3+ must refuse `wrapped_up`.
 
-Decay: drop a report after 45 minutes. A venue returns to `unknown` when nothing is left.
+Decay: drop a report after 20 minutes. A venue returns to `unknown` when nothing is left.
 
 ## `GET /v1/occupancy`
 
@@ -30,7 +30,7 @@ Optional query: `dc`, `world`.
     "happeningReports": 3,
     "wrappedUpReports": 0,
     "updatedAt": "2026-09-12T06:00:00Z",
-    "expiresAt": "2026-09-12T06:45:00Z"
+    "expiresAt": "2026-09-12T06:20:00Z"
   }
 ]
 ```
@@ -73,4 +73,4 @@ If the occupancy host also mirrors listings. Otherwise the plugin reads `https:/
 
 ## Buffering
 
-Do not write every POST straight to the database. Ingest, coalesce by `venueId`, store the snapshot `{ state, happeningReports, wrappedUpReports, updatedAt, expiresAt }`. Public GET reads the snapshot.
+Do not serve GET from raw POSTs. Ingest into `reports`, coalesce by `venueId` into the `occupancy` snapshot `{ state, happeningReports, wrappedUpReports, updatedAt, expiresAt }`. Public GET reads the snapshot only. Raw reports are kept for owners/schedulers, not shown on the public list. Window is 20 minutes.

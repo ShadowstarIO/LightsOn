@@ -1,0 +1,12 @@
+name = "lightson"
+main = "src/index.js"
+compatibility_date = "2026-09-12"
+account_id = "db80b407c9444b69c5bc38bbe07efb38"
+
+[triggers]
+crons = ["* * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "lightson"
+database_id = "d171d9e5-0dd2-47c8-a41d-43b4a221f449"

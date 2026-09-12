@@ -25,7 +25,9 @@ See [docs/PRIVACY.md](docs/PRIVACY.md) and [docs/API.md](docs/API.md).
 
 ## Status
 
-Early source. Not in the Dalamud plugin installer yet. No public occupancy API is wired — set one in Settings when that endpoint exists. The venue list already loads from the public FFXIV Venues API.
+Early source. Not in the Dalamud plugin installer yet. Occupancy API is a Cloudflare Worker in [`worker/`](worker/). After you deploy it, paste the `*.workers.dev` URL into Settings.
+
+The venue list loads from the public FFXIV Venues API. Occupancy stays empty until that URL is set.
 
 ## Build
 

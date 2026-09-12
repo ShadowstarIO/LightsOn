@@ -1,0 +1,12 @@
+{
+  "name": "lightson-worker",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:apply": "wrangler d1 execute lightson --remote --file=schema.sql"
+  },
+  "devDependencies": {
+    "wrangler": "^4.34.0"
+  }
+}
