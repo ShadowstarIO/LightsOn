@@ -3,7 +3,7 @@ using LightsOn.Api;
 
 namespace LightsOn;
 
-internal sealed class Session
+public sealed class Session
 {
     public string PlotKey { get; set; } = "";
     public DateTimeOffset PlotSince { get; set; }
