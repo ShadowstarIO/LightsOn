@@ -16,7 +16,7 @@ public sealed class MainWindow : Window
     private string? selectedId;
     private string actionLine = "";
 
-    private static readonly string[] Filters = ["All", "Scheduled open", "Happening"];
+    private static readonly string[] Filters = ["All", "Marked open", "Lanterns lit"];
 
     public MainWindow(Plugin plugin)
         : base("LightsOn###LightsOnMain")
@@ -36,7 +36,7 @@ public sealed class MainWindow : Window
         var cfg = plugin.Configuration;
         if (!cfg.HasSeenWelcome)
         {
-            ImGui.TextWrapped("Listings come from FFXIV Venues. Occupancy reports are optional, on-plot, and never include names or counts.");
+            ImGui.TextWrapped(Copy.Welcome);
             if (ImGui.Button("Got it"))
             {
                 cfg.HasSeenWelcome = true;
@@ -82,7 +82,7 @@ public sealed class MainWindow : Window
             else if (occ.IsWrappedUp)
                 ImGui.TextColored(UiTheme.Wrapped, WrappedLabel(occ));
             else if (venue.Resolution?.IsNow == true)
-                ImGui.TextDisabled("hours");
+                ImGui.TextDisabled(Copy.MarkedOpen);
             if (loc is not null)
                 ImGui.TextDisabled(loc.Address);
         }
@@ -111,21 +111,21 @@ public sealed class MainWindow : Window
         ImGui.Spacing();
         if (occ.IsHappening)
         {
-            ImGui.TextColored(UiTheme.Happening, "Something's happening");
+            ImGui.TextColored(UiTheme.Happening, Copy.Happening);
             ImGui.TextDisabled(HappeningLabel(occ));
         }
         else if (occ.IsWrappedUp)
         {
-            ImGui.TextColored(UiTheme.Wrapped, "Wrapped up early");
+            ImGui.TextColored(UiTheme.Wrapped, Copy.Wrapped);
             ImGui.TextDisabled(WrappedLabel(occ));
         }
         else if (venue.Resolution?.IsNow == true)
         {
-            ImGui.TextColored(UiTheme.Amber, "Scheduled open — no occupancy report yet");
+            ImGui.TextColored(UiTheme.Amber, $"{Copy.MarkedOpen} — {Copy.NoReport}");
         }
         else
         {
-            ImGui.TextDisabled("No occupancy report");
+            ImGui.TextDisabled(Copy.NoReport);
         }
 
         ImGui.Spacing();
@@ -139,10 +139,10 @@ public sealed class MainWindow : Window
         var canReport = onPlot && plugin.Configuration.ReportOptIn;
         if (!canReport)
             ImGui.BeginDisabled();
-        if (ImGui.Button("Something's happening"))
+        if (ImGui.Button(Copy.HappeningButton))
             _ = Report(venue, "happening");
         ImGui.SameLine();
-        if (ImGui.Button("Wrapped up early"))
+        if (ImGui.Button(Copy.WrappedButton))
             _ = Report(venue, "wrapped_up");
         if (!canReport)
             ImGui.EndDisabled();

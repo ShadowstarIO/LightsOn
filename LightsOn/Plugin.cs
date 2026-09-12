@@ -160,16 +160,16 @@ public sealed class Plugin : IDalamudPlugin
         if (kind == "happening")
         {
             if (!scan.ThresholdMet)
-                return "Scan did not hit 3+ (after your filters). Nothing sent.";
+                return "Not enough company after your filters. Nothing sent.";
             if (!scan.Inside)
-                return "Step inside, then report happening. The street cannot see the room.";
+                return "Step inside, then report lanterns lit. The street cannot see the room.";
         }
         else if (kind == "wrapped_up")
         {
             if (scan.ThresholdMet)
-                return "Scan hit 3+. Wrapped-up is blocked.";
+                return "Enough company on the scan. Wrapped up early is blocked.";
             if (scan.Inside)
-                return "You are inside with under 3 after filters. Wrapped-up is for a locked door and empty yard.";
+                return "You are inside and it is quiet. Wrapped up early is for a locked door and empty yard.";
         }
         else
         {
@@ -199,7 +199,7 @@ public sealed class Plugin : IDalamudPlugin
         {
             await occupancy.PostReport(Configuration.OccupancyApiUrl, report, CancellationToken.None).ConfigureAwait(true);
             await RefreshVenues(true).ConfigureAwait(true);
-            return kind == "happening" ? "Reported: something's happening." : "Reported: wrapped up early.";
+            return kind == "happening" ? "Reported: lanterns are lit." : "Reported: wrapped up early.";
         }
         catch (Exception ex)
         {

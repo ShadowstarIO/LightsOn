@@ -1,8 +1,8 @@
 # LightsOn
 
-See if an FFXIV venue has people there — **happening** or **wrapped up early**.
+See if an FFXIV venue has **company** — **lanterns lit**, or **wrapped up early**.
 
-Posted hours lie. LightsOn is the occupancy layer on top of the public [FFXIV Venues](https://ffxivvenues.com/) list. It does not rank venues by size or “how busy.” A place with three people is happening. A locked door and an empty yard is wrapped up early.
+Posted hours lie. LightsOn is the occupancy layer on top of the public [FFXIV Venues](https://ffxivvenues.com/) list. A place with enough company is lanterns lit. A locked door and an empty yard is wrapped up early.
 
 `/lightson` or `/lo`
 
@@ -17,11 +17,25 @@ The plugin never uploads:
 - friend or FC lists
 - a player count
 
-The server only sees: venue id, `happening` or `wrapped_up`, a resettable random reporter id, and that the 3+ check passed (a boolean). Friends and FC members are subtracted on your client before that boolean is decided.
+The server only sees: venue id, lanterns lit or wrapped up early, a resettable random reporter id, and that enough company passed (a boolean). Friends and FC members are subtracted on your client before that boolean is decided.
 
-A passing 3+ scan cannot file wrapped-up. Several reports raise confidence. Reports age out.
+A scan with enough company cannot file wrapped-up. Several reports raise confidence. Reports age out in about 20 minutes.
+
+See [docs/PRIVACY.md](docs/PRIVACY.md), [docs/API.md](docs/API.md), and [docs/ACTIVITY.md](docs/ACTIVITY.md) (OOC/IC wording).
 
 See [docs/PRIVACY.md](docs/PRIVACY.md) and [docs/API.md](docs/API.md).
+
+## Test in Dalamud
+
+Custom plugin repo:
+
+```
+https://raw.githubusercontent.com/XozaShadow/LightsOn/main/repo.json
+```
+
+Dalamud → Settings → Experimental → Custom Plugin Repositories → add that URL → Save → Plugin Installer → LightsOn.
+
+Occupancy API is already defaulted to `https://REDACTED`.
 
 ## Status
 

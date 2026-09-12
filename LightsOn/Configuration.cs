@@ -14,7 +14,7 @@ public sealed class Configuration : IPluginConfiguration
     public bool ExcludeFriends { get; set; } = true;
     public bool ExcludeFreeCompany { get; set; } = true;
     public string ReporterId { get; set; } = "";
-    public string OccupancyApiUrl { get; set; } = "";
+    public string OccupancyApiUrl { get; set; } = "https://REDACTED";
 
     public void EnsureReporterId()
     {
