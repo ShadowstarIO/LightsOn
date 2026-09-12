@@ -236,13 +236,27 @@ async function getReportLog(env, venueId) {
   if (!/^[A-Za-z0-9_-]{4,32}$/.test(venueId))
     return [];
   const since = new Date(Date.now() - WINDOW_MS).toISOString();
-  const { results } = await env.DB.prepare(
-    `SELECT kind, at, inside, threshold_met AS thresholdMet,
-            door_locked AS doorLocked, voices, glance, music
-     FROM reports
-     WHERE venue_id = ? AND at >= ?
-     ORDER BY at DESC LIMIT 24`,
-  ).bind(venueId, since).all();
+  try {
+    const { results } = await env.DB.prepare(
+      `SELECT kind, at, inside, threshold_met AS thresholdMet,
+              door_locked AS doorLocked, voices, glance, music
+       FROM reports
+       WHERE venue_id = ? AND at >= ?
+       ORDER BY at DESC LIMIT 24`,
+    ).bind(venueId, since).all();
+    return mapLog(results);
+  } catch {
+    const { results } = await env.DB.prepare(
+      `SELECT kind, at, inside, threshold_met AS thresholdMet
+       FROM reports
+       WHERE venue_id = ? AND at >= ?
+       ORDER BY at DESC LIMIT 24`,
+    ).bind(venueId, since).all();
+    return mapLog(results);
+  }
+}
+
+function mapLog(results) {
   return (results ?? []).map((row) => ({
     kind: row.kind,
     at: row.at,
