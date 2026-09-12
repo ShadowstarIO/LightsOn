@@ -1,6 +1,7 @@
 name = "lightson"
 main = "src/index.js"
 compatibility_date = "2026-09-12"
+workers_dev = true
 account_id = "db80b407c9444b69c5bc38bbe07efb38"
 
 [triggers]

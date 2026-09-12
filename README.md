@@ -25,7 +25,7 @@ See [docs/PRIVACY.md](docs/PRIVACY.md) and [docs/API.md](docs/API.md).
 
 ## Status
 
-Early source. Not in the Dalamud plugin installer yet. Occupancy API is a Cloudflare Worker in [`worker/`](worker/). After you deploy it, paste the `*.workers.dev` URL into Settings.
+Early source. Not in the Dalamud plugin installer yet. Occupancy API is a Cloudflare Worker in [`worker/`](worker/), deployed by GitHub Actions. After the first deploy, the URL is `https://lightson.wbro12-cloudflare.workers.dev` — paste that origin into plugin Settings.
 
 The venue list loads from the public FFXIV Venues API. Occupancy stays empty until that URL is set.
 
