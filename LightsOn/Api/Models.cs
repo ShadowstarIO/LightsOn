@@ -14,6 +14,7 @@ public sealed class VenueListing
 
     [JsonIgnore] public OccupancySnapshot Occupancy { get; set; } = OccupancySnapshot.Unknown;
     [JsonIgnore] public IReadOnlyList<GuestNote> Notes { get; set; } = [];
+    [JsonIgnore] public IReadOnlyList<OccupancyEvent> Log { get; set; } = [];
 }
 
 public sealed class VenueLocation
@@ -56,6 +57,14 @@ public sealed class OccupancySnapshot
 
     [JsonIgnore] public bool IsHappening => State == "happening";
     [JsonIgnore] public bool IsWrappedUp => State == "wrapped_up";
+}
+
+public sealed class OccupancyEvent
+{
+    public string Kind { get; set; } = "";
+    public DateTimeOffset At { get; set; }
+    public bool Inside { get; set; }
+    public bool ThresholdMet { get; set; }
 }
 
 public sealed class OccupancyReport

@@ -45,7 +45,7 @@ internal static class NearbyScan
         if (player is null)
             return new ScanResult(false, false, false, 0, 0, false, false, false, "Not logged in");
 
-        var here = HousingReader.Read(CurrentZoneName());
+        var here = HousingReader.Read();
         if (!here.OnPlot)
             return new ScanResult(false, false, false, 0, 0, false, false, false, here.Summary);
 
@@ -259,12 +259,14 @@ internal static class NearbyScan
         if (!string.Equals(CurrentWorldName(), loc.World, StringComparison.OrdinalIgnoreCase))
             return false;
 
-        var here = HousingReader.Read(CurrentZoneName());
+        var here = HousingReader.Read();
         if (!here.OnPlot)
             return false;
-        if (!string.Equals(here.District, loc.District, StringComparison.OrdinalIgnoreCase))
-            return false;
         if (here.Ward != loc.Ward || here.Plot != loc.Plot)
+            return false;
+        if (here.District.Length > 0 && loc.District.Length > 0
+            && HousingReader.IsKnownDistrict(here.District)
+            && !string.Equals(here.District, loc.District, StringComparison.OrdinalIgnoreCase))
             return false;
         if (loc.Subdivision && !here.Subdivision)
             return false;
@@ -285,10 +287,10 @@ internal static class NearbyScan
 
     public static string PlotKey()
     {
-        var here = HousingReader.Read(CurrentZoneName());
+        var here = HousingReader.Read();
         if (!here.OnPlot)
             return "";
-        return $"{CurrentWorldName()}|{here.District}|{here.Ward}|{here.Plot}|{(here.Subdivision ? 1 : 0)}";
+        return $"{CurrentWorldName()}|{here.Ward}|{here.Plot}|{(here.Subdivision ? 1 : 0)}";
     }
 
     public static string CurrentWorldName()
