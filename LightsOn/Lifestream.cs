@@ -21,6 +21,8 @@ internal static class Lifestream
 
     public static void Go(VenueLocation loc)
     {
+        if (!Reach.CanVisitWorld(loc.World))
+            return;
         var place = loc.Apartment > 0 || loc.Room > 0
             ? $"w{loc.Ward} {(loc.Apartment > 0 ? loc.Apartment : loc.Room)}"
             : $"w{loc.Ward} p{loc.Plot}";
