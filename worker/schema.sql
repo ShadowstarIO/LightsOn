@@ -11,6 +11,10 @@ CREATE TABLE IF NOT EXISTS reports (
   subdivision INTEGER NOT NULL DEFAULT 0,
   inside INTEGER NOT NULL DEFAULT 0,
   threshold_met INTEGER NOT NULL DEFAULT 0,
+  door_locked INTEGER NOT NULL DEFAULT 0,
+  voices INTEGER NOT NULL DEFAULT 0,
+  glance INTEGER NOT NULL DEFAULT 0,
+  music INTEGER NOT NULL DEFAULT 0,
   source TEXT NOT NULL DEFAULT 'plugin'
 );
 
@@ -22,6 +26,12 @@ CREATE TABLE IF NOT EXISTS occupancy (
   state TEXT NOT NULL,
   happening_reports INTEGER NOT NULL DEFAULT 0,
   wrapped_up_reports INTEGER NOT NULL DEFAULT 0,
+  interior_happening INTEGER NOT NULL DEFAULT 0,
+  interior_wrapped INTEGER NOT NULL DEFAULT 0,
+  exterior_happening INTEGER NOT NULL DEFAULT 0,
+  exterior_wrapped INTEGER NOT NULL DEFAULT 0,
+  door_locked INTEGER NOT NULL DEFAULT 0,
+  both_layers INTEGER NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL,
   expires_at TEXT NOT NULL
 );
@@ -35,6 +45,7 @@ CREATE TABLE IF NOT EXISTS venues (
   ward INTEGER,
   plot INTEGER,
   subdivision INTEGER NOT NULL DEFAULT 0,
+  open_now INTEGER NOT NULL DEFAULT 0,
   updated_at TEXT NOT NULL
 );
 

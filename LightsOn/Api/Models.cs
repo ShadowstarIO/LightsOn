@@ -10,11 +10,47 @@ public sealed class VenueListing
     public string Name { get; set; } = "";
     public VenueLocation? Location { get; set; }
     public bool Sfw { get; set; } = true;
+    public bool Hiring { get; set; }
+    public string? Website { get; set; }
+    public string? Discord { get; set; }
     public VenueResolution? Resolution { get; set; }
+    public List<VenueSchedule> Schedule { get; set; } = [];
 
     [JsonIgnore] public OccupancySnapshot Occupancy { get; set; } = OccupancySnapshot.Unknown;
     [JsonIgnore] public IReadOnlyList<GuestNote> Notes { get; set; } = [];
     [JsonIgnore] public IReadOnlyList<OccupancyEvent> Log { get; set; } = [];
+
+    public void BindHours()
+    {
+        var open = Schedule.Find(s => s.Resolution?.IsNow == true)
+                   ?? Schedule.Find(s => s.Resolution?.IsWithinWeek == true);
+        if (open?.Resolution is not null)
+            Resolution = open.Resolution;
+    }
+
+    public string HoursLine
+    {
+        get
+        {
+            var r = Resolution;
+            if (r is null)
+                return "Hours not listed";
+            if (r.IsNow)
+            {
+                if (r.End is DateTimeOffset end)
+                    return $"Open now · until {end.ToLocalTime():h:mm tt}";
+                return "Open now";
+            }
+            if (r.Start is DateTimeOffset start)
+                return $"Next {start.ToLocalTime():ddd h:mm tt}";
+            return "Not in posted hours";
+        }
+    }
+}
+
+public sealed class VenueSchedule
+{
+    public VenueResolution? Resolution { get; set; }
 }
 
 public sealed class VenueLocation
@@ -25,16 +61,23 @@ public sealed class VenueLocation
     public int Ward { get; set; }
     public int Plot { get; set; }
     public int Apartment { get; set; }
+    public int Room { get; set; }
     public bool Subdivision { get; set; }
+
+    public int RoomNo => Apartment > 0 ? Apartment : Room;
 
     public string Address
     {
         get
         {
-            var plot = Plot > 0 ? $"Plot {Plot}" : "";
-            var sub = Subdivision ? " (Sub)" : "";
-            var apt = Apartment > 0 ? $" Apt {Apartment}" : "";
-            return $"{World} · {District} Ward {Ward} {plot}{sub}{apt}".Trim();
+            var place = Plot > 0 ? $"W{Ward} P{Plot}" : $"W{Ward}";
+            if (RoomNo > 0)
+            {
+                if (Subdivision)
+                    place += " sub";
+                place += $" R{RoomNo}";
+            }
+            return $"{World} · {District} {place}".Trim();
         }
     }
 }
@@ -42,6 +85,9 @@ public sealed class VenueLocation
 public sealed class VenueResolution
 {
     public bool IsNow { get; set; }
+    public bool IsWithinWeek { get; set; }
+    public DateTimeOffset? Start { get; set; }
+    public DateTimeOffset? End { get; set; }
 }
 
 public sealed class OccupancySnapshot
@@ -52,11 +98,18 @@ public sealed class OccupancySnapshot
     public string State { get; set; } = "unknown";
     public int HappeningReports { get; set; }
     public int WrappedUpReports { get; set; }
+    public int InteriorHappening { get; set; }
+    public int InteriorWrapped { get; set; }
+    public int ExteriorHappening { get; set; }
+    public int ExteriorWrapped { get; set; }
+    public bool DoorLocked { get; set; }
+    public bool BothLayers { get; set; }
     public DateTimeOffset? UpdatedAt { get; set; }
     public DateTimeOffset? ExpiresAt { get; set; }
 
-    [JsonIgnore] public bool IsHappening => State == "happening";
+    [JsonIgnore] public bool IsHappening => State is "happening" or "mixed";
     [JsonIgnore] public bool IsWrappedUp => State == "wrapped_up";
+    [JsonIgnore] public bool IsMixed => State == "mixed";
 }
 
 public sealed class OccupancyEvent
@@ -65,6 +118,10 @@ public sealed class OccupancyEvent
     public DateTimeOffset At { get; set; }
     public bool Inside { get; set; }
     public bool ThresholdMet { get; set; }
+    public bool DoorLocked { get; set; }
+    public bool Voices { get; set; }
+    public bool Glance { get; set; }
+    public bool Music { get; set; }
 }
 
 public sealed class OccupancyReport
@@ -85,6 +142,10 @@ public sealed class OccupancyProof
     public bool Subdivision { get; set; }
     public bool Inside { get; set; }
     public bool ThresholdMet { get; set; }
+    public bool DoorLocked { get; set; }
+    public bool Voices { get; set; }
+    public bool Glance { get; set; }
+    public bool Music { get; set; }
 }
 
 public sealed class GuestNote

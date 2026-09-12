@@ -65,7 +65,7 @@ public sealed class ConfigWindow : Window
             cfg.Save();
         }
 
-        ImGui.TextDisabled("Wrapped up early always asks twice, needs a few minutes on the plot, and waits 20 minutes after you turn reports on. Occupancy is one report per 20 minutes.");
+        ImGui.TextDisabled("Wrapped up always asks twice, needs a few minutes on the plot, and waits 20 minutes after you turn reports on. One report per layer per 20 minutes.");
 
         var friends = cfg.ExcludeFriends;
         if (ImGui.Checkbox("Leave friends out of company", ref friends))
@@ -138,7 +138,7 @@ public sealed class ConfigWindow : Window
         Line("A glance", "You or a patron has the other targeted. +1 total.");
         Line("Someone reached out", "Tell or party chat with a patron here. +1 total.");
         Line("Voices nearby", "Say with a patron here. Off unless you turn it on. +1 total.");
-        ImGui.TextDisabled("Enough company = score 3 on that layer. A property check needs the yard and the inside (or a locked door). Apartments are listed, not checked.");
+        ImGui.TextDisabled("Enough company = score 3 on that layer. Yard and room are sent separately. Ward + Plot is the property; rooms add to it. Apartment buildings without a plot are not checked.");
 
         ImGui.Separator();
         UiTheme.Section("Reporter id");

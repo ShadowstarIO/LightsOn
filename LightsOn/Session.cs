@@ -16,11 +16,13 @@ public sealed class Session
     public bool WrappedConfirm { get; set; }
     public DateTimeOffset LastAutoHappening { get; set; }
     public string LastAutoVenue { get; set; } = "";
+    public bool LastAutoInside { get; set; }
     public DateTimeOffset LastOutdoorPost { get; set; }
     public OutdoorPending? OutdoorPrivate { get; set; }
     public PlotCheck Check { get; } = new();
     public HashSet<string> HeardNames { get; } = new(StringComparer.OrdinalIgnoreCase);
     public bool SelfSpoke { get; set; }
+    public bool HeardMusic { get; set; }
 
     public TimeSpan OnPlot => PlotKey.Length == 0 ? TimeSpan.Zero : DateTimeOffset.UtcNow - PlotSince;
     public TimeSpan InPocket => PocketKey.Length == 0 ? TimeSpan.Zero : DateTimeOffset.UtcNow - PocketSince;
@@ -34,6 +36,7 @@ public sealed class Session
         Check.Clear();
         HeardNames.Clear();
         SelfSpoke = false;
+        HeardMusic = false;
         Hop = null;
     }
 }

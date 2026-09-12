@@ -65,6 +65,8 @@ internal static class NearbyScan
             bits.Add("a glance");
         if (tally.Voices)
             bits.Add("voices nearby");
+        if (plugin.Session.HeardMusic)
+            bits.Add("music");
         var summary = string.Join(" · ", bits) + " · " + here.Summary;
         return new ScanResult(true, here.Inside, met, tally.Score, tally.Patrons, tally.InCharacter, tally.Glance, tally.Voices, summary);
     }
@@ -109,7 +111,7 @@ internal static class NearbyScan
     public static bool OccupancyEligible(VenueListing venue)
     {
         var loc = venue.Location;
-        return loc is not null && loc.Apartment <= 0 && loc.Plot is >= 1 and <= 60;
+        return loc is not null && loc.Plot is >= 1 and <= 60 && loc.Ward is >= 1 and <= 30;
     }
 
     private readonly record struct Crowd(
@@ -269,8 +271,6 @@ internal static class NearbyScan
             && !string.Equals(here.District, loc.District, StringComparison.OrdinalIgnoreCase))
             return false;
         if (loc.Subdivision && !here.Subdivision)
-            return false;
-        if (loc.Apartment > 0 && here.Apartment != loc.Apartment)
             return false;
         return true;
     }
