@@ -25,6 +25,6 @@ internal static class Lifestream
             ? $"w{loc.Ward} {(loc.Apartment > 0 ? loc.Apartment : loc.Room)}"
             : $"w{loc.Ward} p{loc.Plot}";
         var args = $"{loc.World}, {loc.District}, {place}";
-        Plugin.PluginInterface.GetIpcSubscriber<string>("Lifestream.ExecuteCommand").Invoke(args);
+        Plugin.PluginInterface.GetIpcSubscriber<string, object>("Lifestream.ExecuteCommand").InvokeAction(args);
     }
 }
