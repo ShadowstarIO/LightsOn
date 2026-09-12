@@ -4,7 +4,7 @@ Tired of looking for a place that’s open, walking the ward, and finding the li
 
 **Lanterns lit** means enough company on a listed plot. **Wrapped up early** means the hours said open, but the door and yard look quiet. It does not rank venues by size. A small lounge with three patrons counts.
 
-A check needs **the yard and the inside**. Nothing is sent until both are scanned, unless the door is locked. Apartments stay on the list; occupancy is not checked there.
+A check can be sent from the **yard or the room** — they list separately. One layer is lighter until the other shows up. **Ward + Plot** is the property; rooms add to it.
 
 `/lightson` or `/lo`
 

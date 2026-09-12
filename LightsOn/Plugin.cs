@@ -57,7 +57,7 @@ public sealed class Plugin : IDalamudPlugin
         Configuration.Save();
 
         http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.3.1 (+https://github.com/XozaShadow/LightsOn)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.3.2 (+https://github.com/XozaShadow/LightsOn)");
         directory = new DirectoryClient(http);
         occupancy = new OccupancyClient(http);
 
@@ -234,32 +234,39 @@ public sealed class Plugin : IDalamudPlugin
         if (!ClientState.IsLoggedIn || ObjectTable.LocalPlayer is null)
             return "Not logged in.";
         if (!NearbyScan.OccupancyEligible(venue))
-            return Copy.ApartmentSkip;
+            return Copy.NoPlot;
         if (!NearbyScan.MatchesVenue(venue))
             return "Go to that plot first. Reports are location-checked.";
 
-        ScanNow();
-        var check = Session.Check;
-        if (!check.Ready)
-            return check.Guide;
+        var scan = ScanNow();
+        if (!scan.OnPlot)
+            return scan.Summary;
+
+        var doorLocked = kind == "door_locked";
+        if (doorLocked)
+        {
+            if (scan.Inside)
+                return "Mark the door from the yard.";
+            kind = scan.ThresholdMet ? "happening" : "wrapped_up";
+        }
 
         if (kind == "happening")
         {
-            if (!check.Enough)
+            if (!scan.ThresholdMet && !doorLocked)
                 return "Not enough company after your filters. Nothing sent.";
         }
         else if (kind == "wrapped_up")
         {
-            if (check.Enough)
-                return "Enough company on the check. Wrapped up early is blocked.";
+            if (scan.ThresholdMet)
+                return "Enough company on this layer. Wrapped up is blocked.";
             if (DateTimeOffset.UtcNow - Configuration.ReportEnabledAt < TimeSpan.FromMinutes(Limits.OptInWrappedMinutes))
-                return "Send reports was just turned on. Wrapped up early waits 20 minutes.";
+                return "Send reports was just turned on. Wrapped up waits 20 minutes.";
             if (Session.OnPlot < TimeSpan.FromMinutes(Limits.WrappedDwellMinutes))
                 return "Stay on the plot a couple of minutes first.";
-            if (!fromAuto && !Session.WrappedConfirm)
+            if (!fromAuto && !Session.WrappedConfirm && !doorLocked)
             {
                 Session.WrappedConfirm = true;
-                return "Press Wrapped up early again to confirm.";
+                return "Press Wrapped up again to confirm.";
             }
         }
         else
@@ -281,8 +288,12 @@ public sealed class Plugin : IDalamudPlugin
                 Ward = here.Ward,
                 Plot = here.Plot,
                 Subdivision = here.Subdivision,
-                Inside = check.HasInside,
-                ThresholdMet = check.Enough,
+                Inside = scan.Inside,
+                ThresholdMet = scan.ThresholdMet,
+                DoorLocked = doorLocked,
+                Voices = scan.Voices,
+                Glance = scan.Glance,
+                Music = Session.HeardMusic,
             },
         };
 
@@ -292,7 +303,7 @@ public sealed class Plugin : IDalamudPlugin
             Session.WrappedConfirm = false;
             await RefreshVenues(true).ConfigureAwait(true);
             await RefreshLog(venue).ConfigureAwait(true);
-            return kind == "happening" ? "Reported: lanterns are lit." : "Reported: wrapped up early.";
+            return kind == "happening" ? "Reported: lanterns are lit." : "Reported: wrapped up.";
         }
         catch (Exception ex)
         {
@@ -314,8 +325,8 @@ public sealed class Plugin : IDalamudPlugin
         if (Session.OnPlot < TimeSpan.FromMinutes(Limits.LogBookDwellMinutes))
             return "Stay about 20 minutes before leaving a note.";
         var trimmed = (text ?? "").Trim();
-        if (trimmed.Length < 2 || trimmed.Length > 80)
-            return "Keep it between 2 and 80 characters.";
+        if (Array.IndexOf(Copy.LogPhrases, trimmed) < 0)
+            return "Pick a line from the list.";
 
         var scan = ScanNow();
         var here = HousingReader.Read();
@@ -442,13 +453,14 @@ public sealed class Plugin : IDalamudPlugin
 
         if (SendBlock() is not null)
             return;
-        if (!Configuration.AutoHappening || !Session.Check.Ready || !Session.Check.Enough)
+        if (!Configuration.AutoHappening || !scan.OnPlot || !scan.ThresholdMet)
             return;
-        if (venue.Id == Session.LastAutoVenue
+        if (venue.Id == Session.LastAutoVenue && scan.Inside == Session.LastAutoInside
             && DateTimeOffset.UtcNow - Session.LastAutoHappening < TimeSpan.FromMinutes(Limits.SendRateMinutes))
             return;
 
         Session.LastAutoVenue = venue.Id;
+        Session.LastAutoInside = scan.Inside;
         Session.LastAutoHappening = DateTimeOffset.UtcNow;
         _ = AutoHappening(venue);
     }
@@ -503,10 +515,9 @@ public sealed class Plugin : IDalamudPlugin
 
         var text = message.Message.TextValue;
         if (LooksLocked(text))
-        {
             Session.Check.MarkLocked();
-            return;
-        }
+        if (LooksMusic(text))
+            Session.HeardMusic = true;
 
         var type = message.LogKind;
         var say = type == XivChatType.Say;
@@ -530,6 +541,14 @@ public sealed class Plugin : IDalamudPlugin
         }
         else
             Session.HeardNames.Add(name);
+    }
+
+    private static bool LooksMusic(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return false;
+        return text.Contains("youtu", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("twitch.tv", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool LooksLocked(string text)

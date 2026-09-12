@@ -45,6 +45,7 @@ internal sealed class DirectoryClient
                 venue.Location.District ??= "";
             }
             venue.Occupancy ??= OccupancySnapshot.Unknown;
+            venue.BindHours();
             cache.Add(venue);
         }
         fetchedAt = DateTimeOffset.UtcNow;
