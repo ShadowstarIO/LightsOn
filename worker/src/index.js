@@ -6,7 +6,7 @@ const NOTE_RATE_MS = 24 * 60 * 60 * 1000;
 const VENUE_REFRESH_MS = 30 * 60 * 1000;
 const MAX_BODY = 8 * 1024;
 const VENUES_URL = "https://api.ffxivvenues.com/venue";
-const UA = "LightsOn/0.0.3 (+https://github.com/XozaShadow/LightsOn)";
+const UA = "LightsOn/0.0.3.1 (+https://github.com/XozaShadow/LightsOn)";
 const TIER_RANK = { extremely_busy: 3, some_activity: 2, some_wandering: 1 };
 
 const CORS = {
@@ -33,6 +33,8 @@ export default {
         return cachedGet(request, ctx, 60, () => getOutdoors(env));
       if (request.method === "GET" && url.pathname === "/v1/notes")
         return json(await getNotes(env, url.searchParams.get("venueId") || ""));
+      if (request.method === "GET" && url.pathname === "/v1/reports")
+        return cachedGet(request, ctx, 60, () => getReportLog(env, url.searchParams.get("venueId") || ""));
       if (request.method === "POST" && url.pathname === "/v1/reports")
         return await limited(request, () => postReport(env, request));
       if (request.method === "POST" && url.pathname === "/v1/notes")
@@ -173,6 +175,24 @@ async function postReport(env, request) {
      FROM occupancy WHERE venue_id = ?`,
   ).bind(body.venueId).first();
   return json({ ok: true, occupancy: occupancy ?? { venueId: body.venueId, state: "unknown" } });
+}
+
+async function getReportLog(env, venueId) {
+  if (!/^[A-Za-z0-9_-]{4,32}$/.test(venueId))
+    return [];
+  const since = new Date(Date.now() - WINDOW_MS).toISOString();
+  const { results } = await env.DB.prepare(
+    `SELECT kind, at, inside, threshold_met AS thresholdMet
+     FROM reports
+     WHERE venue_id = ? AND at >= ?
+     ORDER BY at DESC LIMIT 20`,
+  ).bind(venueId, since).all();
+  return (results ?? []).map((row) => ({
+    kind: row.kind,
+    at: row.at,
+    inside: Number(row.inside) === 1,
+    thresholdMet: Number(row.thresholdMet) === 1,
+  }));
 }
 
 async function getNotes(env, venueId) {

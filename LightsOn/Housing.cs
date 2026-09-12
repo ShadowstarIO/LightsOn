@@ -1,5 +1,6 @@
 using System;
 using FFXIVClientStructs.FFXIV.Client.Game;
+using Lumina.Excel.Sheets;
 
 namespace LightsOn;
 
@@ -20,9 +21,9 @@ public readonly record struct HousingAddress(
 
 internal static class HousingReader
 {
-    public static HousingAddress Read(string territoryName)
+    public static HousingAddress Read()
     {
-        var district = ResolveDistrict(territoryName);
+        var district = DistrictFromTerritory(Plugin.ClientState.TerritoryType);
         var ward = 0;
         var plot = 0;
         var room = 0;
@@ -36,11 +37,28 @@ internal static class HousingReader
                 var h = HousingManager.Instance();
                 if (h != null)
                 {
+                    inside = h->IsInside();
                     ward = h->GetCurrentWard() + 1;
-                    plot = h->GetCurrentPlot() + 1;
+                    var rawPlot = h->GetCurrentPlot();
+                    if (rawPlot is >= 0 and < 60)
+                        plot = rawPlot + 1;
                     room = h->GetCurrentRoom();
                     division = h->GetCurrentDivision();
-                    inside = h->IsInside();
+
+                    if (inside)
+                    {
+                        var hid = h->GetCurrentIndoorHouseId();
+                        if (!hid.IsApartment && hid.PlotIndex < 60)
+                        {
+                            plot = hid.PlotIndex + 1;
+                            ward = hid.WardIndex + 1;
+                        }
+                        if (hid.IsApartment)
+                            room = hid.RoomNumber > 0 ? hid.RoomNumber : room;
+                        var fromHouse = DistrictFromTerritory(hid.TerritoryTypeId);
+                        if (IsKnownDistrict(fromHouse))
+                            district = fromHouse;
+                    }
                 }
             }
         }
@@ -54,10 +72,36 @@ internal static class HousingReader
 
         var subdivision = division == 2 || plot is >= 31 and <= 60;
         if (plot is < 1 or > 60)
-            return new HousingAddress(false, district, ward, 0, room, subdivision);
+            return new HousingAddress(inside, district, ward, 0, room, subdivision);
 
         return new HousingAddress(inside, district, ward, plot, room, subdivision);
     }
+
+    public static string DistrictFromTerritory(ushort territoryId)
+    {
+        if (territoryId is 0 or 0xFFFF)
+            return "";
+        try
+        {
+            var row = Plugin.DataManager.GetExcelSheet<TerritoryType>().GetRowOrDefault(territoryId);
+            if (row is not TerritoryType t)
+                return "";
+            var place = t.PlaceName.ValueNullable?.Name.ToString() ?? "";
+            var zone = t.PlaceNameZone.ValueNullable?.Name.ToString() ?? "";
+            var resolved = ResolveDistrict(place);
+            if (IsKnownDistrict(resolved))
+                return resolved;
+            resolved = ResolveDistrict(zone);
+            return IsKnownDistrict(resolved) ? resolved : "";
+        }
+        catch
+        {
+            return "";
+        }
+    }
+
+    public static bool IsKnownDistrict(string name) =>
+        name is "Mist" or "The Lavender Beds" or "The Goblet" or "Shirogane" or "Empyreum";
 
     public static string ResolveDistrict(string territoryName)
     {
@@ -73,7 +117,7 @@ internal static class HousingReader
             return "Shirogane";
         if (Contains(territoryName, "Empyreum") || Contains(territoryName, "Ingleside"))
             return "Empyreum";
-        return territoryName;
+        return "";
     }
 
     private static bool Contains(string hay, string needle) =>

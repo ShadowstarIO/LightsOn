@@ -57,7 +57,7 @@ public sealed class Plugin : IDalamudPlugin
         Configuration.Save();
 
         http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.3 (+https://github.com/XozaShadow/LightsOn)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.3.1 (+https://github.com/XozaShadow/LightsOn)");
         directory = new DirectoryClient(http);
         occupancy = new OccupancyClient(http);
 
@@ -207,6 +207,26 @@ public sealed class Plugin : IDalamudPlugin
         }
     }
 
+    public async Task RefreshLog(VenueListing venue)
+    {
+        if (!Configuration.OccupancyEnabled)
+        {
+            venue.Log = [];
+            return;
+        }
+
+        try
+        {
+            venue.Log = await occupancy.GetReportLog(Configuration.OccupancyApiUrl, venue.Id, CancellationToken.None)
+                .ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            Log.Verbose(ex, "Report log fetch failed");
+            venue.Log = [];
+        }
+    }
+
     public async Task<string> TryReport(VenueListing venue, string kind, bool fromAuto = false)
     {
         if (SendBlock() is { } blocked)
@@ -247,7 +267,7 @@ public sealed class Plugin : IDalamudPlugin
             return "Unknown report kind.";
         }
 
-        var here = HousingReader.Read(NearbyScan.CurrentZoneName());
+        var here = HousingReader.Read();
         var report = new OccupancyReport
         {
             VenueId = venue.Id,
@@ -271,6 +291,7 @@ public sealed class Plugin : IDalamudPlugin
             await occupancy.PostReport(Configuration.OccupancyApiUrl, report, CancellationToken.None).ConfigureAwait(true);
             Session.WrappedConfirm = false;
             await RefreshVenues(true).ConfigureAwait(true);
+            await RefreshLog(venue).ConfigureAwait(true);
             return kind == "happening" ? "Reported: lanterns are lit." : "Reported: wrapped up early.";
         }
         catch (Exception ex)
@@ -297,7 +318,7 @@ public sealed class Plugin : IDalamudPlugin
             return "Keep it between 2 and 80 characters.";
 
         var scan = ScanNow();
-        var here = HousingReader.Read(NearbyScan.CurrentZoneName());
+        var here = HousingReader.Read();
         var post = new NotePost
         {
             VenueId = venue.Id,
@@ -545,7 +566,7 @@ public sealed class Plugin : IDalamudPlugin
                     Notify("Not logged in.");
                     break;
                 }
-                var here = HousingReader.Read(NearbyScan.CurrentZoneName());
+                var here = HousingReader.Read();
                 Notify($"{NearbyScan.CurrentWorldName()} · {here.Summary}");
                 break;
             }

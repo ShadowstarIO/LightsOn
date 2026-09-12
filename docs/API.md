@@ -2,11 +2,15 @@
 
 v1. HTTPS hostname required. No IPs.
 
-Public window: **20 minutes**. Raw reports stay in D1 for hosts; GET never reads them.
+Public window: **20 minutes**. Reporter ids never leave the worker.
 
 ## `GET /v1/occupancy`
 
 Optional `dc`, `world`. Cached ~60s. Snapshot only: `venueId`, `state` (`happening` | `wrapped_up`), report counts, `updatedAt`, `expiresAt`.
+
+## `GET /v1/reports?venueId=`
+
+Last 20 minutes for one listing: time, kind, yard vs inside. No reporter ids.
 
 ## `POST /v1/reports`
 

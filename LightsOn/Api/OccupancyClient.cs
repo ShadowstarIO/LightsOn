@@ -41,6 +41,12 @@ internal sealed class OccupancyClient
         return map;
     }
 
+    public async Task<List<OccupancyEvent>> GetReportLog(string baseUrl, string venueId, CancellationToken token)
+    {
+        var url = baseUrl.Trim().TrimEnd('/') + "/v1/reports?venueId=" + Uri.EscapeDataString(venueId);
+        return await http.GetFromJsonAsync<List<OccupancyEvent>>(url, Json, token).ConfigureAwait(false) ?? [];
+    }
+
     public async Task PostReport(string baseUrl, OccupancyReport report, CancellationToken token)
     {
         var url = baseUrl.Trim().TrimEnd('/') + "/v1/reports";

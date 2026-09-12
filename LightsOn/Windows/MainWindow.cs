@@ -129,7 +129,6 @@ public sealed class MainWindow : Window
             var label = $"{mark}{venue.Name ?? ""}##{venue.Id}";
             if (ImGui.Selectable(label, venue.Id == selectedId))
                 selectedId = venue.Id;
-            ImGui.SameLine();
             if (occ.IsHappening)
                 ImGui.TextColored(UiTheme.Happening, HappeningLabel(occ));
             else if (occ.IsWrappedUp)
@@ -137,7 +136,7 @@ public sealed class MainWindow : Window
             else if (venue.Resolution?.IsNow == true)
                 ImGui.TextDisabled(Copy.MarkedOpen);
             if (loc is not null)
-                ImGui.TextDisabled(loc.Address);
+                ImGui.TextWrapped(loc.Address);
         }
         if (rows.Count == 0)
             ImGui.TextDisabled("No venues match.");
@@ -156,24 +155,24 @@ public sealed class MainWindow : Window
     {
         var loc = venue.Location;
         var occ = venue.Occupancy ?? OccupancySnapshot.Unknown;
-        ImGui.TextUnformatted(venue.Name ?? "");
+        ImGui.TextWrapped(venue.Name ?? "");
         if (loc is not null)
-            ImGui.TextDisabled(loc.Address);
+            ImGui.TextWrapped(loc.Address);
         ImGui.TextDisabled(venue.Sfw ? "SFW listing" : "NSFW listing");
 
         ImGui.Spacing();
         if (occ.IsHappening)
         {
             ImGui.TextColored(UiTheme.Happening, Copy.Happening);
-            ImGui.TextDisabled(HappeningLabel(occ));
+            ImGui.TextWrapped(HappeningLabel(occ));
         }
         else if (occ.IsWrappedUp)
         {
             ImGui.TextColored(UiTheme.Wrapped, Copy.Wrapped);
-            ImGui.TextDisabled(WrappedLabel(occ));
+            ImGui.TextWrapped(WrappedLabel(occ));
         }
         else if (venue.Resolution?.IsNow == true)
-            ImGui.TextColored(UiTheme.Amber, $"{Copy.MarkedOpen} — {Copy.NoReport}");
+            ImGui.TextWrapped($"{Copy.MarkedOpen} — {Copy.NoReport}");
         else
             ImGui.TextDisabled(Copy.NoReport);
 
@@ -184,8 +183,41 @@ public sealed class MainWindow : Window
         if (plugin.ActionLine.Length > 0)
             ImGui.TextWrapped(plugin.ActionLine);
 
+        DrawReportLog(venue);
+
         if (occ.IsHappening)
             DrawLogBook(venue, loc is not null && NearbyScan.MatchesVenue(venue));
+    }
+
+    private void DrawReportLog(VenueListing venue)
+    {
+        if (notesFor != venue.Id)
+        {
+            notesFor = venue.Id;
+            _ = plugin.RefreshLog(venue);
+            _ = plugin.RefreshNotes(venue);
+        }
+
+        ImGui.Separator();
+        UiTheme.Section("Reports", true);
+        var log = venue.Log;
+        if (log.Count == 0)
+        {
+            ImGui.TextDisabled("No occupancy reports in the last 20 minutes.");
+            return;
+        }
+
+        var litInside = log.Any(e => e.Kind == "happening" && e.Inside);
+        var quietYard = log.Any(e => e.Kind == "wrapped_up");
+        if (litInside && quietYard)
+            ImGui.TextWrapped(Copy.MixedReports);
+
+        foreach (var row in log)
+        {
+            var what = row.Kind == "happening" ? Copy.Happening : Copy.Wrapped;
+            var layer = row.Inside ? "from inside" : "from the yard";
+            ImGui.TextWrapped($"{Age(row.At)} — {what} · {layer}");
+        }
     }
 
     private void DrawCheck(VenueListing venue, bool compact)
@@ -252,12 +284,6 @@ public sealed class MainWindow : Window
         ImGui.Spacing();
         UiTheme.Section("Log book", true);
         ImGui.TextDisabled(Copy.LogBookHint);
-        if (notesFor != venue.Id)
-        {
-            notesFor = venue.Id;
-            _ = plugin.RefreshNotes(venue);
-        }
-
         if (venue.Notes.Count == 0)
             ImGui.TextDisabled("No notes tonight.");
         foreach (var note in venue.Notes)
