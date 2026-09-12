@@ -73,14 +73,8 @@ public sealed class MainWindow : Window
             return;
 
         var hours = venue.Resolution?.IsNow == true ? Copy.MarkedOpen : "listed, not in posted hours";
-        ImGui.TextWrapped($"{venue.Name} — {hours}. Checking the plot…");
-        ImGui.TextDisabled(plugin.LastScanLine);
-        if (ImGui.SmallButton(Copy.HappeningButton))
-            _ = Report(venue, "happening");
-        ImGui.SameLine();
-        if (ImGui.SmallButton(Copy.WrappedButton))
-            _ = Report(venue, "wrapped_up");
-        ImGui.SameLine();
+        ImGui.TextWrapped($"{venue.Name ?? ""} — {hours}");
+        DrawCheck(venue, true);
         if (ImGui.SmallButton("Not now"))
             plugin.Session.HopDismissed = true;
         ImGui.Separator();
@@ -185,21 +179,62 @@ public sealed class MainWindow : Window
 
         ImGui.Spacing();
         UiTheme.Section("On this plot", true);
-        ImGui.TextWrapped(plugin.LastScanLine);
+        DrawCheck(venue, false);
 
-        var onPlot = loc is not null && NearbyScan.MatchesVenue(venue);
+        if (plugin.ActionLine.Length > 0)
+            ImGui.TextWrapped(plugin.ActionLine);
+
+        if (occ.IsHappening)
+            DrawLogBook(venue, loc is not null && NearbyScan.MatchesVenue(venue));
+    }
+
+    private void DrawCheck(VenueListing venue, bool compact)
+    {
+        if (!NearbyScan.OccupancyEligible(venue))
+        {
+            ImGui.TextDisabled(Copy.ApartmentSkip);
+            return;
+        }
+
+        var onPlot = NearbyScan.MatchesVenue(venue);
         if (!onPlot)
-            ImGui.TextDisabled("Travel to the plot to report.");
+        {
+            ImGui.TextDisabled("Travel to the plot to check occupancy.");
+            return;
+        }
 
-        var canReport = onPlot && plugin.CanSend;
-        if (!canReport)
+        var check = plugin.Session.Check;
+        ImGui.TextWrapped(check.Guide);
+        ImGui.TextDisabled(plugin.LastScanLine);
+        if (check.HasYard)
+            ImGui.TextDisabled(check.Yard!.Value.ThresholdMet ? "Yard · enough company" : "Yard · quiet");
+        if (check.HasInside)
+            ImGui.TextDisabled(check.Inside!.Value.ThresholdMet ? "Inside · enough company" : "Inside · quiet");
+        if (check.DoorLocked)
+            ImGui.TextDisabled("Door locked — interior skipped.");
+
+        var canSend = plugin.CanSend;
+        if (onPlot && !check.HasInside && check.HasYard && !check.DoorLocked)
+        {
+            if (ImGui.SmallButton(Copy.DoorLocked))
+                plugin.MarkDoorLocked();
+            if (!compact)
+                ImGui.SameLine();
+        }
+
+        if (!canSend || !check.Ready)
             ImGui.BeginDisabled();
-        if (ImGui.Button(Copy.HappeningButton))
-            _ = Report(venue, "happening");
-        ImGui.SameLine();
-        if (ImGui.Button(Copy.WrappedButton))
-            _ = Report(venue, "wrapped_up");
-        if (!canReport)
+        if (check.Enough)
+        {
+            if (ImGui.Button(Copy.HappeningButton))
+                _ = Report(venue, "happening");
+        }
+        else
+        {
+            if (ImGui.Button(Copy.WrappedButton))
+                _ = Report(venue, "wrapped_up");
+        }
+        if (!canSend || !check.Ready)
             ImGui.EndDisabled();
 
         if (!plugin.CanSend)
@@ -208,11 +243,8 @@ public sealed class MainWindow : Window
                 : plugin.Configuration.ReporterResetLockRemaining > TimeSpan.Zero
                     ? "Reports locked after reporter id reset."
                     : "Settings → Send reports.");
-        if (plugin.ActionLine.Length > 0)
-            ImGui.TextWrapped(plugin.ActionLine);
-
-        if (occ.IsHappening)
-            DrawLogBook(venue, onPlot);
+        else if (!check.Ready)
+            ImGui.TextDisabled("Nothing is sent until both layers are checked (or the door is locked).");
     }
 
     private void DrawLogBook(VenueListing venue, bool onPlot)

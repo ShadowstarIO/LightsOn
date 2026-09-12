@@ -65,7 +65,7 @@ public sealed class ConfigWindow : Window
             cfg.Save();
         }
 
-        ImGui.TextDisabled("Wrapped up early always asks twice, needs a few minutes on the plot, and waits 20 minutes after you turn reports on.");
+        ImGui.TextDisabled("Wrapped up early always asks twice, needs a few minutes on the plot, and waits 20 minutes after you turn reports on. Occupancy is one report per 20 minutes.");
 
         var friends = cfg.ExcludeFriends;
         if (ImGui.Checkbox("Leave friends out of company", ref friends))
@@ -85,6 +85,27 @@ public sealed class ConfigWindow : Window
         if (ImGui.Checkbox("Count in-character / seeking company / at the bench as extra company", ref status))
         {
             cfg.UseStatusSignals = status;
+            cfg.Save();
+        }
+
+        var glance = cfg.UseGlanceSignals;
+        if (ImGui.Checkbox("Count a glance (looking at / looked at) as extra company", ref glance))
+        {
+            cfg.UseGlanceSignals = glance;
+            cfg.Save();
+        }
+
+        var chat = cfg.UseChatSignals;
+        if (ImGui.Checkbox("Count tells and party chat with patrons here as extra company", ref chat))
+        {
+            cfg.UseChatSignals = chat;
+            cfg.Save();
+        }
+
+        var say = cfg.UseSaySignals;
+        if (ImGui.Checkbox("Count say with patrons here (voices nearby)", ref say))
+        {
+            cfg.UseSaySignals = say;
             cfg.Save();
         }
 
@@ -114,14 +135,14 @@ public sealed class ConfigWindow : Window
         Line("In character", "Role-Playing status. +1.");
         Line("Seeking company", "Looking for Party / recruiting. +1.");
         Line("At the bench", "Melding Materia. +1.");
-        Line("Someone reached out", "/tell — not scored in this testing build.");
-        Line("An exchange", "Trade — not scored in this testing build.");
-        Line("Voices nearby", "Say — off. Not scored.");
-        ImGui.TextDisabled("Enough company = score 3. Quiet = under that, plus the door/yard.");
+        Line("A glance", "You or a patron has the other targeted. +1 total.");
+        Line("Someone reached out", "Tell or party chat with a patron here. +1 total.");
+        Line("Voices nearby", "Say with a patron here. Off unless you turn it on. +1 total.");
+        ImGui.TextDisabled("Enough company = score 3 on that layer. A property check needs the yard and the inside (or a locked door). Apartments are listed, not checked.");
 
         ImGui.Separator();
         UiTheme.Section("Reporter id");
-        ImGui.TextWrapped("Random. Not your character. After a reset, reports wait 30 minutes.");
+        ImGui.TextWrapped("Random. Not your character. After a reset, reports wait 20 minutes.");
         ImGui.TextDisabled(ShortId(cfg.ReporterId));
         if (ImGui.Button("Reset reporter id"))
         {

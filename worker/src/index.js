@@ -1,12 +1,12 @@
 const WINDOW_MS = 20 * 60 * 1000;
-const RATE_MS = 15 * 60 * 1000;
+const RATE_MS = 20 * 60 * 1000;
 const HISTORY_MS = 14 * 24 * 60 * 60 * 1000;
 const NOTE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 const NOTE_RATE_MS = 24 * 60 * 60 * 1000;
 const VENUE_REFRESH_MS = 30 * 60 * 1000;
 const MAX_BODY = 8 * 1024;
 const VENUES_URL = "https://api.ffxivvenues.com/venue";
-const UA = "LightsOn/0.0.2 (+https://github.com/XozaShadow/LightsOn)";
+const UA = "LightsOn/0.0.3 (+https://github.com/XozaShadow/LightsOn)";
 const TIER_RANK = { extremely_busy: 3, some_activity: 2, some_wandering: 1 };
 
 const CORS = {
