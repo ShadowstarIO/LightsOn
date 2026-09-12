@@ -5,7 +5,7 @@ const NOTE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 const NOTE_RATE_MS = 24 * 60 * 60 * 1000;
 const MAX_BODY = 8 * 1024;
 const VENUES_URL = "https://api.ffxivvenues.com/venue";
-const UA = "LightsOn/0.0.3.3 (+https://github.com/XozaShadow/LightsOn)";
+const UA = "LightsOn/0.0.3.4 (+https://github.com/XozaShadow/LightsOn)";
 const TIER_RANK = { extremely_busy: 3, some_activity: 2, some_wandering: 1 };
 const venueCache = new Map();
 let migrateTried = false;
@@ -168,6 +168,8 @@ async function postReport(env, request) {
     return json({ error: "unknown venue" }, 400);
   if (!plotMatches(venue, body.proof))
     return json({ error: "proof does not match listed plot" }, 400);
+  if (!venue.open_now)
+    return json({ error: "venue is not in posted hours" }, 400);
 
   const now = new Date();
   const at = parseAt(body.at, now);

@@ -57,7 +57,7 @@ public sealed class Plugin : IDalamudPlugin
         Configuration.Save();
 
         http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.3.3 (+https://github.com/XozaShadow/LightsOn)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.3.4 (+https://github.com/XozaShadow/LightsOn)");
         directory = new DirectoryClient(http);
         occupancy = new OccupancyClient(http);
 
@@ -237,6 +237,8 @@ public sealed class Plugin : IDalamudPlugin
             return Copy.NoPlot;
         if (!NearbyScan.MatchesVenue(venue))
             return "Go to that plot first. Reports are location-checked.";
+        if (venue.Resolution?.IsNow != true)
+            return "Only posted hours are reported. Nothing sent.";
 
         var scan = ScanNow();
         if (!scan.OnPlot)
@@ -405,6 +407,9 @@ public sealed class Plugin : IDalamudPlugin
             return "Scan does not match the listed plot. Nothing sent.";
         if (msg.Contains("thresholdMet", StringComparison.OrdinalIgnoreCase))
             return "Not enough company after the scan. Nothing sent.";
+        if (msg.Contains("posted hours", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("not open", StringComparison.OrdinalIgnoreCase))
+            return "Only posted hours are reported. Nothing sent.";
         if (msg.Contains("unknown venue", StringComparison.OrdinalIgnoreCase))
             return "Listing is not on the occupancy server yet. Hit Refresh.";
         if (msg.Contains("busy", StringComparison.OrdinalIgnoreCase))
@@ -475,6 +480,8 @@ public sealed class Plugin : IDalamudPlugin
         if (SendBlock() is not null)
             return;
         if (!Configuration.AutoHappening || !scan.OnPlot || !scan.ThresholdMet)
+            return;
+        if (venue.Resolution?.IsNow != true)
             return;
         if (venue.Id == Session.LastAutoVenue && scan.Inside == Session.LastAutoInside
             && DateTimeOffset.UtcNow - Session.LastAutoHappening < TimeSpan.FromMinutes(Limits.SendRateMinutes))
