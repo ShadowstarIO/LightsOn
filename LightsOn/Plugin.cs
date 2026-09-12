@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
+using Dalamud.Game.Chat;
 using Dalamud.Game.Command;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
@@ -474,18 +475,19 @@ public sealed class Plugin : IDalamudPlugin
         _ = TryOutdoor(scan, null);
     }
 
-    private void OnChat(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
+    private void OnChat(IHandleableChatMessage message)
     {
         if (Session.PlotKey.Length == 0)
             return;
 
-        var text = message.TextValue;
+        var text = message.Message.TextValue;
         if (LooksLocked(text))
         {
             Session.Check.MarkLocked();
             return;
         }
 
+        var type = message.LogKind;
         var say = type == XivChatType.Say;
         var tell = type is XivChatType.TellIncoming or XivChatType.TellOutgoing;
         var party = type == XivChatType.Party;
@@ -496,7 +498,7 @@ public sealed class Plugin : IDalamudPlugin
         if (!say && !tell && !party)
             return;
 
-        var name = NearbyScan.NormName(sender.TextValue);
+        var name = NearbyScan.NormName(message.Sender.TextValue);
         var me = NearbyScan.NormName(ObjectTable.LocalPlayer?.Name.TextValue ?? "");
         if (name.Length == 0)
             return;
