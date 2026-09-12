@@ -4,6 +4,8 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using Dalamud.Game.Command;
+using Dalamud.Game.Text;
+using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
@@ -54,7 +56,7 @@ public sealed class Plugin : IDalamudPlugin
         Configuration.Save();
 
         http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.2 (+https://github.com/XozaShadow/LightsOn)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.3 (+https://github.com/XozaShadow/LightsOn)");
         directory = new DirectoryClient(http);
         occupancy = new OccupancyClient(http);
 
@@ -77,6 +79,7 @@ public sealed class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.OpenMainUi += ToggleMainUi;
         Framework.Update += OnFramework;
         ClientState.TerritoryChanged += OnTerritory;
+        Chat.ChatMessage += OnChat;
 
         if (Configuration.OpenUiOnLoad)
             mainWindow.IsOpen = true;
@@ -86,6 +89,7 @@ public sealed class Plugin : IDalamudPlugin
 
     public void Dispose()
     {
+        Chat.ChatMessage -= OnChat;
         Framework.Update -= OnFramework;
         ClientState.TerritoryChanged -= OnTerritory;
         refreshCts.Cancel();
@@ -108,7 +112,15 @@ public sealed class Plugin : IDalamudPlugin
     {
         var result = NearbyScan.Run(this);
         LastScanLine = result.Summary;
+        if (result.OnPlot)
+            Session.Check.Absorb(result);
         return result;
+    }
+
+    public void MarkDoorLocked()
+    {
+        Session.Check.MarkLocked();
+        ActionLine = Session.Check.Guide;
     }
 
     public async Task RefreshVenues(bool force)
@@ -200,39 +212,34 @@ public sealed class Plugin : IDalamudPlugin
             return blocked;
         if (!ClientState.IsLoggedIn || ObjectTable.LocalPlayer is null)
             return "Not logged in.";
+        if (!NearbyScan.OccupancyEligible(venue))
+            return Copy.ApartmentSkip;
         if (!NearbyScan.MatchesVenue(venue))
             return "Go to that plot first. Reports are location-checked.";
 
-        if (kind == "wrapped_up")
+        ScanNow();
+        var check = Session.Check;
+        if (!check.Ready)
+            return check.Guide;
+
+        if (kind == "happening")
         {
-            if (DateTimeOffset.UtcNow - Configuration.ReportEnabledAt < TimeSpan.FromMinutes(20))
+            if (!check.Enough)
+                return "Not enough company after your filters. Nothing sent.";
+        }
+        else if (kind == "wrapped_up")
+        {
+            if (check.Enough)
+                return "Enough company on the check. Wrapped up early is blocked.";
+            if (DateTimeOffset.UtcNow - Configuration.ReportEnabledAt < TimeSpan.FromMinutes(Limits.OptInWrappedMinutes))
                 return "Send reports was just turned on. Wrapped up early waits 20 minutes.";
-            if (Session.OnPlot < TimeSpan.FromMinutes(2.5))
+            if (Session.OnPlot < TimeSpan.FromMinutes(Limits.WrappedDwellMinutes))
                 return "Stay on the plot a couple of minutes first.";
             if (!fromAuto && !Session.WrappedConfirm)
             {
                 Session.WrappedConfirm = true;
                 return "Press Wrapped up early again to confirm.";
             }
-        }
-
-        var scan = ScanNow();
-        if (!scan.OnPlot)
-            return scan.Summary;
-
-        if (kind == "happening")
-        {
-            if (!scan.ThresholdMet)
-                return "Not enough company after your filters. Nothing sent.";
-            if (!scan.Inside)
-                return "Step inside, then report lanterns lit. The street cannot see the room.";
-        }
-        else if (kind == "wrapped_up")
-        {
-            if (scan.ThresholdMet)
-                return "Enough company on the scan. Wrapped up early is blocked.";
-            if (scan.Inside)
-                return "You are inside and it is quiet. Wrapped up early is for a locked door and empty yard.";
         }
         else
         {
@@ -253,8 +260,8 @@ public sealed class Plugin : IDalamudPlugin
                 Ward = here.Ward,
                 Plot = here.Plot,
                 Subdivision = here.Subdivision,
-                Inside = scan.Inside,
-                ThresholdMet = scan.ThresholdMet,
+                Inside = check.HasInside,
+                ThresholdMet = check.Enough,
             },
         };
 
@@ -282,7 +289,7 @@ public sealed class Plugin : IDalamudPlugin
             return "Log book is only for lanterns lit.";
         if (!NearbyScan.MatchesVenue(venue))
             return "Go to that plot first.";
-        if (Session.OnPlot < TimeSpan.FromMinutes(20))
+        if (Session.OnPlot < TimeSpan.FromMinutes(Limits.LogBookDwellMinutes))
             return "Stay about 20 minutes before leaving a note.";
         var trimmed = (text ?? "").Trim();
         if (trimmed.Length < 2 || trimmed.Length > 80)
@@ -387,8 +394,7 @@ public sealed class Plugin : IDalamudPlugin
     private void OnTerritory(uint _)
     {
         Session.PocketKey = "";
-        Session.PlotKey = "";
-        Session.Hop = null;
+        Session.ResetPlot("");
         Session.OutdoorPrivate = null;
     }
 
@@ -397,29 +403,32 @@ public sealed class Plugin : IDalamudPlugin
         var key = NearbyScan.PlotKey();
         if (key != Session.PlotKey)
         {
-            Session.PlotKey = key;
-            Session.PlotSince = DateTimeOffset.UtcNow;
-            Session.HopDismissed = false;
-            Session.WrappedConfirm = false;
+            Session.ResetPlot(key);
             Session.Hop = key.Length == 0 ? null : NearbyScan.ListedHere(Venues);
         }
 
         var venue = Session.Hop;
-        if (venue is null || SendBlock() is not null)
+        if (venue is null)
             return;
 
-        if (Configuration.AutoHappening
-            && (venue.Id != Session.LastAutoVenue || DateTimeOffset.UtcNow - Session.LastAutoHappening > TimeSpan.FromMinutes(15)))
-        {
-            var scan = NearbyScan.Run(this);
-            LastScanLine = scan.Summary;
-            if (scan.Inside && scan.ThresholdMet)
-            {
-                Session.LastAutoVenue = venue.Id;
-                Session.LastAutoHappening = DateTimeOffset.UtcNow;
-                _ = AutoHappening(venue);
-            }
-        }
+        var scan = NearbyScan.Run(this);
+        LastScanLine = scan.Summary;
+        if (!NearbyScan.OccupancyEligible(venue))
+            return;
+        if (scan.OnPlot)
+            Session.Check.Absorb(scan);
+
+        if (SendBlock() is not null)
+            return;
+        if (!Configuration.AutoHappening || !Session.Check.Ready || !Session.Check.Enough)
+            return;
+        if (venue.Id == Session.LastAutoVenue
+            && DateTimeOffset.UtcNow - Session.LastAutoHappening < TimeSpan.FromMinutes(Limits.SendRateMinutes))
+            return;
+
+        Session.LastAutoVenue = venue.Id;
+        Session.LastAutoHappening = DateTimeOffset.UtcNow;
+        _ = AutoHappening(venue);
     }
 
     private async Task AutoHappening(VenueListing venue)
@@ -448,9 +457,9 @@ public sealed class Plugin : IDalamudPlugin
             return;
         }
 
-        if (Session.InPocket < TimeSpan.FromMinutes(10))
+        if (Session.InPocket < TimeSpan.FromMinutes(Limits.OutdoorDwellMinutes))
             return;
-        if (DateTimeOffset.UtcNow - Session.LastOutdoorPost < TimeSpan.FromMinutes(15))
+        if (DateTimeOffset.UtcNow - Session.LastOutdoorPost < TimeSpan.FromMinutes(Limits.SendRateMinutes))
             return;
         if (scan.Tier.Length == 0)
             return;
@@ -463,6 +472,50 @@ public sealed class Plugin : IDalamudPlugin
 
         Session.LastOutdoorPost = DateTimeOffset.UtcNow;
         _ = TryOutdoor(scan, null);
+    }
+
+    private void OnChat(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool isHandled)
+    {
+        if (Session.PlotKey.Length == 0)
+            return;
+
+        var text = message.TextValue;
+        if (LooksLocked(text))
+        {
+            Session.Check.MarkLocked();
+            return;
+        }
+
+        var say = type == XivChatType.Say;
+        var tell = type is XivChatType.TellIncoming or XivChatType.TellOutgoing;
+        var party = type == XivChatType.Party;
+        if (say && !Configuration.UseSaySignals)
+            return;
+        if ((tell || party) && !Configuration.UseChatSignals)
+            return;
+        if (!say && !tell && !party)
+            return;
+
+        var name = NearbyScan.NormName(sender.TextValue);
+        var me = NearbyScan.NormName(ObjectTable.LocalPlayer?.Name.TextValue ?? "");
+        if (name.Length == 0)
+            return;
+        if (me.Length > 0 && name == me)
+        {
+            if (say || party)
+                Session.SelfSpoke = true;
+        }
+        else
+            Session.HeardNames.Add(name);
+    }
+
+    private static bool LooksLocked(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return false;
+        return text.Contains("house is locked", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("door is locked", StringComparison.OrdinalIgnoreCase)
+               || text.Contains("cannot enter this house", StringComparison.OrdinalIgnoreCase);
     }
 
     private void OnCommand(string command, string args)

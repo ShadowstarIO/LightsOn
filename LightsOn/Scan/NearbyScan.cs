@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Objects.SubKinds;
+using Dalamud.Game.ClientState.Objects.Types;
 using LightsOn.Api;
 using Lumina.Excel.Sheets;
 
@@ -14,9 +15,11 @@ public readonly record struct ScanResult(
     int Score,
     int Patrons,
     bool InCharacter,
+    bool Glance,
+    bool Voices,
     string Summary)
 {
-    public const int Threshold = 3;
+    public const int Threshold = Limits.Threshold;
 }
 
 public readonly record struct OutdoorScan(
@@ -40,20 +43,17 @@ internal static class NearbyScan
     {
         var player = Plugin.ObjectTable.LocalPlayer;
         if (player is null)
-            return new ScanResult(false, false, false, 0, 0, false, "Not logged in");
+            return new ScanResult(false, false, false, 0, 0, false, false, false, "Not logged in");
 
         var here = HousingReader.Read(CurrentZoneName());
         if (!here.OnPlot)
-            return new ScanResult(false, false, false, 0, 0, false, here.Summary);
+            return new ScanResult(false, false, false, 0, 0, false, false, false, here.Summary);
 
-        var tally = CountNearby(plugin, player.EntityId, player.CompanyTag.TextValue.Trim());
+        var tally = CountNearby(plugin, player);
         var met = tally.Score >= ScanResult.Threshold;
         var who = plugin.Configuration.ExcludeFriends || plugin.Configuration.ExcludeFreeCompany ? "after filters" : "nearby";
         var bits = new List<string>();
-        if (met)
-            bits.Add(Copy.EnoughCompany);
-        else
-            bits.Add(Copy.Quiet);
+        bits.Add(met ? Copy.EnoughCompany : Copy.Quiet);
         bits.Add(who);
         if (tally.InCharacter)
             bits.Add("in character");
@@ -61,8 +61,12 @@ internal static class NearbyScan
             bits.Add("seeking company");
         if (tally.Bench)
             bits.Add("at the bench");
+        if (tally.Glance)
+            bits.Add("a glance");
+        if (tally.Voices)
+            bits.Add("voices nearby");
         var summary = string.Join(" · ", bits) + " · " + here.Summary;
-        return new ScanResult(true, here.Inside, met, tally.Score, tally.Patrons, tally.InCharacter, summary);
+        return new ScanResult(true, here.Inside, met, tally.Score, tally.Patrons, tally.InCharacter, tally.Glance, tally.Voices, summary);
     }
 
     public static OutdoorScan RunOutdoor(Plugin plugin)
@@ -77,9 +81,9 @@ internal static class NearbyScan
         var gx = (int)MathF.Floor(pos.X / 20f);
         var gz = (int)MathF.Floor(pos.Z / 20f);
         var pocket = $"{world}|{Plugin.ClientState.TerritoryType}|{gx}|{gz}";
-        var tally = CountNearby(plugin, player.EntityId, player.CompanyTag.TextValue.Trim());
+        var tally = CountNearby(plugin, player);
         var tier = TierName(tally.Patrons, tally.Score);
-        var summary = $"{place} · {tier} · {tally.Patrons} patrons scored";
+        var summary = $"{place} · {tier}";
         return new OutdoorScan(pocket, world, place, tally.Patrons, tally.Score, tally.InCharacter, tally.Visible, tally.Familiar, tier, summary);
     }
 
@@ -102,29 +106,38 @@ internal static class NearbyScan
         _ => "Quiet",
     };
 
-    private readonly record struct Tally(int Visible, int Familiar, int Patrons, int Score, bool InCharacter, bool Seeking, bool Bench);
+    public static bool OccupancyEligible(VenueListing venue)
+    {
+        var loc = venue.Location;
+        return loc is not null && loc.Apartment <= 0 && loc.Plot is >= 1 and <= 60;
+    }
 
-    private static Tally CountNearby(Plugin plugin, uint selfId, string myTag)
+    private readonly record struct Crowd(
+        int Visible, int Familiar, int Patrons, int Score,
+        bool InCharacter, bool Seeking, bool Bench, bool Glance, bool Voices);
+
+    private static Crowd CountNearby(Plugin plugin, IPlayerCharacter self)
     {
         var cfg = plugin.Configuration;
         var friends = cfg.ExcludeFriends ? FriendBook.Names() : null;
+        var myTag = self.CompanyTag.TextValue.Trim();
         var visible = 0;
         var familiar = 0;
-        var patrons = 0;
+        var patrons = new List<IPlayerCharacter>();
         var inCharacter = false;
         var seeking = false;
         var bench = false;
 
         foreach (var obj in Plugin.ObjectTable)
         {
-            if (obj is null || obj.ObjectKind != ObjectKind.Pc)
+            if (obj is null || obj.ObjectKind != ObjectKind.Pc || obj is not IPlayerCharacter pc)
                 continue;
-            if (obj.EntityId == selfId)
+            if (pc.EntityId == self.EntityId)
                 continue;
             visible++;
 
-            var name = obj.Name.TextValue;
-            var tag = obj is IPlayerCharacter pc ? pc.CompanyTag.TextValue.Trim() : "";
+            var name = pc.Name.TextValue;
+            var tag = pc.CompanyTag.TextValue.Trim();
             var isFriend = friends is not null && friends.Contains(name);
             var isFc = cfg.ExcludeFreeCompany && myTag.Length > 0 && tag.Length > 0
                        && string.Equals(tag, myTag, StringComparison.OrdinalIgnoreCase);
@@ -134,10 +147,10 @@ internal static class NearbyScan
                 continue;
             }
 
-            patrons++;
-            if (!cfg.UseStatusSignals || obj is not IPlayerCharacter player)
+            patrons.Add(pc);
+            if (!cfg.UseStatusSignals)
                 continue;
-            var status = StatusName(player);
+            var status = StatusName(pc);
             if (status.Contains("role-playing", StringComparison.OrdinalIgnoreCase)
                 || status.Contains("roleplaying", StringComparison.OrdinalIgnoreCase))
                 inCharacter = true;
@@ -149,7 +162,48 @@ internal static class NearbyScan
                 bench = true;
         }
 
-        var score = Math.Min(3, patrons);
+        var patronIds = new HashSet<uint>();
+        foreach (var p in patrons)
+            patronIds.Add(p.EntityId);
+
+        var glance = false;
+        if (cfg.UseGlanceSignals && patrons.Count > 0)
+        {
+            if (self.TargetObject is IPlayerCharacter look && patronIds.Contains(look.EntityId))
+                glance = true;
+            else
+            {
+                foreach (var p in patrons)
+                {
+                    var t = p.TargetObject;
+                    if (t is null)
+                        continue;
+                    if (t.EntityId == self.EntityId || patronIds.Contains(t.EntityId))
+                    {
+                        glance = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        var voices = false;
+        if (patrons.Count > 0)
+        {
+            var heard = plugin.Session.HeardNames;
+            foreach (var p in patrons)
+            {
+                if (heard.Contains(NormName(p.Name.TextValue)))
+                {
+                    voices = true;
+                    break;
+                }
+            }
+            if (!voices && plugin.Session.SelfSpoke)
+                voices = true;
+        }
+
+        var score = Math.Min(3, patrons.Count);
         if (cfg.UseStatusSignals)
         {
             if (inCharacter)
@@ -159,8 +213,30 @@ internal static class NearbyScan
             if (bench)
                 score++;
         }
+        if (glance)
+            score++;
+        if (voices && (cfg.UseChatSignals || cfg.UseSaySignals))
+            score++;
 
-        return new Tally(visible, familiar, patrons, score, inCharacter, seeking, bench);
+        return new Crowd(visible, familiar, patrons.Count, score, inCharacter, seeking, bench, glance, voices);
+    }
+
+    public static string NormName(string raw)
+    {
+        var s = (raw ?? "").Trim();
+        var cut = -1;
+        for (var i = 0; i < s.Length; i++)
+        {
+            var c = s[i];
+            if (c is '«' or '(' or '♂' or '♀' || char.IsControl(c))
+            {
+                cut = i;
+                break;
+            }
+        }
+        if (cut > 0)
+            s = s[..cut];
+        return s.Trim().ToLowerInvariant();
     }
 
     private static string StatusName(IPlayerCharacter player)
@@ -191,6 +267,8 @@ internal static class NearbyScan
         if (here.Ward != loc.Ward || here.Plot != loc.Plot)
             return false;
         if (loc.Subdivision && !here.Subdivision)
+            return false;
+        if (loc.Apartment > 0 && here.Apartment != loc.Apartment)
             return false;
         return true;
     }

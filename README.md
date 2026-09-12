@@ -4,6 +4,8 @@ Tired of looking for a place that’s open, walking the ward, and finding the li
 
 **Lanterns lit** means enough company on a listed plot. **Wrapped up early** means the hours said open, but the door and yard look quiet. It does not rank venues by size. A small lounge with three patrons counts.
 
+A check needs **the yard and the inside**. Nothing is sent until both are scanned, unless the door is locked. Apartments stay on the list; occupancy is not checked there.
+
 `/lightson` or `/lo`
 
 ## Testing
@@ -51,9 +53,11 @@ A second tab for moving or street scenes. Short range (a pocket, not a whole cit
 - Prompt when you walk onto a listed plot
 - Leave friends / Free Company out of company
 - Count in-character / seeking company / at the bench as extra score
+- Count a glance (looking at / looked at)
+- Count tells and party chat with patrons here (say is off unless you turn it on)
 - Log book
 - Note outdoor scenes
-- Reset reporter id (reports wait 30 minutes after a reset)
+- Reset reporter id (reports wait 20 minutes after a reset)
 
 ## Commands
 

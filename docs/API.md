@@ -10,7 +10,7 @@ Optional `dc`, `world`. Cached ~60s. Snapshot only: `venueId`, `state` (`happeni
 
 ## `POST /v1/reports`
 
-`venueId`, `kind` (`happening` | `wrapped_up`), `reporterId`, `proof` (world/plot/inside/`thresholdMet`). No counts, no names. One report per reporter per venue per 15 minutes. Happening requires `thresholdMet`. Wrapped-up is rejected when `thresholdMet`.
+`venueId`, `kind` (`happening` | `wrapped_up`), `reporterId`, `proof` (world/plot/inside/`thresholdMet`). No counts, no names. One report per reporter per venue per 20 minutes. Happening requires `thresholdMet`. Wrapped-up is rejected when `thresholdMet`.
 
 ## `GET /v1/notes?venueId=` / `POST /v1/notes`
 

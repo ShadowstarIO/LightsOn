@@ -9,6 +9,8 @@ LightsOn answers “is anyone at this listed venue?” and “is there a scene i
 - Free Company tag comparison
 - The numeric score used for “enough company”
 - Online-status labels used as extra score (in character, seeking company, at the bench)
+- Who is targeted / targeting you (a glance)
+- That a tell, party line, or say happened with someone already in the scan — never the text
 
 Those never leave the machine.
 
@@ -30,7 +32,7 @@ Listings are fetched from the public community venue directory (`https://api.ffx
 - Your character name or Content ID
 - Exact coordinates (outdoor pockets are a coarse cell)
 - Unlisted houses
-- Chat logs (tells / say / party are not uploaded in this testing build)
+- Chat logs (the words themselves are never uploaded; an optional boolean that someone in range spoke can be scored locally)
 
 ## Reporter id
 
