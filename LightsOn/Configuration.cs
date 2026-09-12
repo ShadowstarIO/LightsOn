@@ -22,6 +22,7 @@ public sealed class Configuration : IPluginConfiguration
     public bool UseSaySignals { get; set; }
     public bool NoteOutdoorScenes { get; set; }
     public bool ListingsOnly { get; set; }
+    public bool ShowOtherRegions { get; set; }
     public string ReporterId { get; set; } = "";
     public string OccupancyApiUrl { get; set; } = "https://REDACTED";
     public long ReportEnabledAtUnix { get; set; }

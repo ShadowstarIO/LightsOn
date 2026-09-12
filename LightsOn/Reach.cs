@@ -1,0 +1,89 @@
+using System;
+using System.Collections.Generic;
+using Lumina.Excel.Sheets;
+
+namespace LightsOn;
+
+internal static class Reach
+{
+    private static Dictionary<string, byte>? worldRegion;
+    private static Dictionary<string, byte>? dcRegion;
+    private static byte myRegion;
+    private static string myWorld = "";
+
+    public static bool CanVisitWorld(string? world)
+    {
+        Ensure();
+        if (myRegion == 0 || string.IsNullOrWhiteSpace(world))
+            return true;
+        return worldRegion is not null
+               && worldRegion.TryGetValue(world.Trim(), out var region)
+               && region == myRegion;
+    }
+
+    public static bool CanVisitDc(string? dc)
+    {
+        Ensure();
+        if (myRegion == 0 || string.IsNullOrWhiteSpace(dc))
+            return true;
+        return dcRegion is not null
+               && dcRegion.TryGetValue(dc.Trim(), out var region)
+               && region == myRegion;
+    }
+
+    private static void Ensure()
+    {
+        var current = NearbyWorld();
+        if (worldRegion is not null && current == myWorld)
+            return;
+
+        myWorld = current;
+        myRegion = 0;
+        var worlds = new Dictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
+        var dcs = new Dictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            var sheet = Plugin.DataManager.GetExcelSheet<World>();
+            foreach (var row in sheet)
+            {
+                var name = row.Name.ToString();
+                if (string.IsNullOrWhiteSpace(name))
+                    continue;
+                var dc = row.DataCenter.ValueNullable;
+                if (dc is null)
+                    continue;
+                var region = dc.Value.Region;
+                if (region == 0)
+                    continue;
+                worlds[name] = region;
+                var dcName = dc.Value.Name.ToString();
+                if (dcName.Length > 0)
+                    dcs[dcName] = region;
+                if (string.Equals(name, current, StringComparison.OrdinalIgnoreCase))
+                    myRegion = region;
+            }
+        }
+        catch
+        {
+            worldRegion = worlds;
+            dcRegion = dcs;
+            return;
+        }
+
+        worldRegion = worlds;
+        dcRegion = dcs;
+    }
+
+    private static string NearbyWorld()
+    {
+        try
+        {
+            var world = Plugin.PlayerState.CurrentWorld;
+            return world.IsValid ? world.Value.Name.ToString() : "";
+        }
+        catch
+        {
+            return "";
+        }
+    }
+}

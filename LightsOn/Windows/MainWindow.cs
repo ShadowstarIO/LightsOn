@@ -113,10 +113,12 @@ public sealed class MainWindow : Window
         if (ImGui.SmallButton("Settings"))
             plugin.ToggleConfigUi();
 
+        var showOther = plugin.Configuration.ShowOtherRegions;
         var dcs = plugin.Venues
             .Select(v => v.Location?.DataCenter ?? "")
             .Where(s => s.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(s => showOther || Reach.CanVisitDc(s))
             .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
             .ToList();
         var worlds = plugin.Venues
@@ -125,6 +127,7 @@ public sealed class MainWindow : Window
             .Select(v => v.Location?.World ?? "")
             .Where(s => s.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(s => showOther || Reach.CanVisitWorld(s))
             .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
             .ToList();
         if (worldPick.Length > 0 && !worlds.Contains(worldPick, StringComparer.OrdinalIgnoreCase))
@@ -141,10 +144,19 @@ public sealed class MainWindow : Window
         ImGui.SameLine();
         ImGui.SetNextItemWidth(130);
         ImGui.Combo("##status", ref filter, StatusFilters, StatusFilters.Length);
+        ImGui.SameLine();
+        if (ImGui.Checkbox("Other regions", ref showOther))
+        {
+            plugin.Configuration.ShowOtherRegions = showOther;
+            plugin.Configuration.Save();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Worlds you cannot visit from this character. Off by default.");
 
         var rows = plugin.Venues
             .Where(Matches)
-            .OrderByDescending(v => v.Resolution?.IsNow == true)
+            .OrderBy(v => Reach.CanVisitWorld(v.Location?.World) ? 0 : 1)
+            .ThenByDescending(v => v.Resolution?.IsNow == true)
             .ThenBy(v => v.Name ?? "", StringComparer.OrdinalIgnoreCase)
             .ToList();
         var selected = rows.FirstOrDefault(v => v.Id == selectedId) ?? rows.FirstOrDefault();
@@ -194,7 +206,7 @@ public sealed class MainWindow : Window
         if (loc is not null)
         {
             ImGui.TextWrapped(loc.Address);
-            if (Lifestream.Installed())
+            if (Lifestream.Installed() && Reach.CanVisitWorld(loc.World))
             {
                 ImGui.SameLine();
                 if (ImGui.SmallButton("Travel to"))
@@ -413,6 +425,9 @@ public sealed class MainWindow : Window
         if (filter == 3 && !occ.IsWrappedUp)
             return false;
         if (filter == 4 && occ.State is not "unknown" and not "")
+            return false;
+        if (!plugin.Configuration.ShowOtherRegions
+            && !Reach.CanVisitWorld(venue.Location?.World))
             return false;
         if (dcPick.Length > 0
             && !string.Equals(venue.Location?.DataCenter, dcPick, StringComparison.OrdinalIgnoreCase))
