@@ -203,7 +203,7 @@ async function postReport(env, request) {
     ).run();
   } catch (err) {
     const msg = String(err && err.message ? err.message : err);
-    if (!/no such column/i.test(msg))
+    if (!/no such column|no column named/i.test(msg))
       throw err;
     await env.DB.prepare(
       `INSERT INTO reports (venue_id, kind, reporter_id, at, world, district, ward, plot, subdivision, inside, threshold_met, source)
