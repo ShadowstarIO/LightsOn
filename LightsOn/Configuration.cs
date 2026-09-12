@@ -6,7 +6,7 @@ namespace LightsOn;
 [Serializable]
 public sealed class Configuration : IPluginConfiguration
 {
-    public int Version { get; set; } = 2;
+    public int Version { get; set; } = 3;
 
     public bool OpenUiOnLoad { get; set; }
     public bool ReportOptIn { get; set; }
@@ -18,14 +18,34 @@ public sealed class Configuration : IPluginConfiguration
     public bool AllowLogBook { get; set; } = true;
     public bool UseStatusSignals { get; set; } = true;
     public bool NoteOutdoorScenes { get; set; }
+    public bool ListingsOnly { get; set; }
     public string ReporterId { get; set; } = "";
     public string OccupancyApiUrl { get; set; } = "https://lightson.wbro12-cloudflare.workers.dev";
     public long ReportEnabledAtUnix { get; set; }
+    public long ReporterResetAtUnix { get; set; }
 
     public DateTimeOffset ReportEnabledAt =>
         ReportEnabledAtUnix > 0
             ? DateTimeOffset.FromUnixTimeSeconds(ReportEnabledAtUnix)
             : DateTimeOffset.MinValue;
+
+    public DateTimeOffset ReporterResetAt =>
+        ReporterResetAtUnix > 0
+            ? DateTimeOffset.FromUnixTimeSeconds(ReporterResetAtUnix)
+            : DateTimeOffset.MinValue;
+
+    public bool OccupancyEnabled => !ListingsOnly;
+
+    public TimeSpan ReporterResetLockRemaining
+    {
+        get
+        {
+            if (ReporterResetAtUnix <= 0)
+                return TimeSpan.Zero;
+            var left = TimeSpan.FromMinutes(30) - (DateTimeOffset.UtcNow - ReporterResetAt);
+            return left > TimeSpan.Zero ? left : TimeSpan.Zero;
+        }
+    }
 
     public void SetReportOptIn(bool on)
     {
@@ -40,7 +60,11 @@ public sealed class Configuration : IPluginConfiguration
             ReporterId = Guid.NewGuid().ToString("N");
     }
 
-    public void ResetReporterId() => ReporterId = Guid.NewGuid().ToString("N");
+    public void ResetReporterId()
+    {
+        ReporterId = Guid.NewGuid().ToString("N");
+        ReporterResetAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+    }
 
     public void Save() => Plugin.PluginInterface.SavePluginConfig(this);
 }
