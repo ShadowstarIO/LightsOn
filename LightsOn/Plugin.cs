@@ -57,7 +57,7 @@ public sealed class Plugin : IDalamudPlugin
         Configuration.Save();
 
         http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.3.2 (+https://github.com/XozaShadow/LightsOn)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.3.3 (+https://github.com/XozaShadow/LightsOn)");
         directory = new DirectoryClient(http);
         occupancy = new OccupancyClient(http);
 
@@ -308,7 +308,7 @@ public sealed class Plugin : IDalamudPlugin
         catch (Exception ex)
         {
             Log.Warning(ex, "Report failed");
-            return "Report did not reach the server.";
+            return FriendlyReportError(ex);
         }
     }
 
@@ -393,6 +393,24 @@ public sealed class Plugin : IDalamudPlugin
         }
     }
 
+    private static string FriendlyReportError(Exception ex)
+    {
+        var msg = ex.Message ?? "";
+        if (msg.Contains("already reported", StringComparison.OrdinalIgnoreCase))
+            return "This layer was already reported in the last 20 minutes.";
+        if (msg.Contains("proof does not match", StringComparison.OrdinalIgnoreCase))
+            return "Scan does not match the listed plot. Nothing sent.";
+        if (msg.Contains("thresholdMet", StringComparison.OrdinalIgnoreCase))
+            return "Not enough company after the scan. Nothing sent.";
+        if (msg.Contains("unknown venue", StringComparison.OrdinalIgnoreCase))
+            return "Listing is not on the occupancy server yet. Hit Refresh.";
+        if (msg.Contains("busy", StringComparison.OrdinalIgnoreCase))
+            return "Server is busy. Try again in a minute.";
+        return string.IsNullOrWhiteSpace(msg) || msg.Length > 160
+            ? "Report did not reach the server."
+            : $"Report did not reach the server ({msg}).";
+    }
+
     private string? SendBlock()
     {
         if (Configuration.ListingsOnly)
@@ -459,18 +477,20 @@ public sealed class Plugin : IDalamudPlugin
             && DateTimeOffset.UtcNow - Session.LastAutoHappening < TimeSpan.FromMinutes(Limits.SendRateMinutes))
             return;
 
-        Session.LastAutoVenue = venue.Id;
-        Session.LastAutoInside = scan.Inside;
-        Session.LastAutoHappening = DateTimeOffset.UtcNow;
-        _ = AutoHappening(venue);
+        _ = AutoHappening(venue, scan.Inside);
     }
 
-    private async Task AutoHappening(VenueListing venue)
+    private async Task AutoHappening(VenueListing venue, bool inside)
     {
         var line = await TryReport(venue, "happening", true).ConfigureAwait(true);
         ActionLine = line;
         if (line.StartsWith("Reported", StringComparison.Ordinal))
+        {
+            Session.LastAutoVenue = venue.Id;
+            Session.LastAutoInside = inside;
+            Session.LastAutoHappening = DateTimeOffset.UtcNow;
             Notify($"{venue.Name}: lanterns are lit.");
+        }
     }
 
     private void TickOutdoor()
