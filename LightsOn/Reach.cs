@@ -39,8 +39,8 @@ internal static class Reach
 
         myWorld = current;
         myRegion = 0;
-        var worlds = new Dictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
-        var dcs = new Dictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
+        var worlds = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+        var dcs = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
         try
         {
             var sheet = Plugin.DataManager.GetExcelSheet<World>();
