@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
@@ -12,12 +13,14 @@ public sealed class MainWindow : Window
 {
     private readonly Plugin plugin;
     private string query = "";
-    private int worldIdx;
+    private string dcPick = "";
+    private string worldPick = "";
+    private string dcFilter = "";
+    private string worldFilter = "";
     private int filter;
     private string? selectedId;
     private int noteIdx;
     private string? notesFor;
-    private string[] worlds = ["All worlds"];
     private static readonly string[] StatusFilters = ["All", "Lanterns lit", "Open now", "Vacant", "No data"];
 
     public MainWindow(Plugin plugin)
@@ -110,22 +113,33 @@ public sealed class MainWindow : Window
         if (ImGui.SmallButton("Settings"))
             plugin.ToggleConfigUi();
 
-        worlds = new[] { "All worlds" }
-            .Concat(plugin.Venues.Select(v => v.Location?.World ?? "")
-                .Where(w => w.Length > 0)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(w => w, StringComparer.OrdinalIgnoreCase))
-            .ToArray();
-        if (worldIdx >= worlds.Length)
-            worldIdx = 0;
+        var dcs = plugin.Venues
+            .Select(v => v.Location?.DataCenter ?? "")
+            .Where(s => s.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var worlds = plugin.Venues
+            .Where(v => dcPick.Length == 0
+                        || string.Equals(v.Location?.DataCenter, dcPick, StringComparison.OrdinalIgnoreCase))
+            .Select(v => v.Location?.World ?? "")
+            .Where(s => s.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (worldPick.Length > 0 && !worlds.Contains(worldPick, StringComparer.OrdinalIgnoreCase))
+            worldPick = "";
 
-        ImGui.SetNextItemWidth(200);
+        ImGui.SetNextItemWidth(180);
         ImGui.InputTextWithHint("##q", "Search name", ref query, 80);
         ImGui.SameLine();
         ImGui.SetNextItemWidth(150);
-        ImGui.Combo("##world", ref worldIdx, worlds, worlds.Length);
+        PlaceCombo("##dc", dcPick.Length == 0 ? "All data centers" : dcPick, dcs, "All data centers", ref dcFilter, ref dcPick);
         ImGui.SameLine();
-        ImGui.SetNextItemWidth(140);
+        ImGui.SetNextItemWidth(150);
+        PlaceCombo("##world", worldPick.Length == 0 ? "All worlds" : worldPick, worlds, "All worlds", ref worldFilter, ref worldPick);
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(130);
         ImGui.Combo("##status", ref filter, StatusFilters, StatusFilters.Length);
 
         var rows = plugin.Venues
@@ -400,17 +414,38 @@ public sealed class MainWindow : Window
             return false;
         if (filter == 4 && occ.State is not "unknown" and not "")
             return false;
-        if (worldIdx > 0 && worldIdx < worlds.Length)
-        {
-            if (!string.Equals(venue.Location?.World, worlds[worldIdx], StringComparison.OrdinalIgnoreCase))
-                return false;
-        }
+        if (dcPick.Length > 0
+            && !string.Equals(venue.Location?.DataCenter, dcPick, StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (worldPick.Length > 0
+            && !string.Equals(venue.Location?.World, worldPick, StringComparison.OrdinalIgnoreCase))
+            return false;
         if (string.IsNullOrEmpty(query))
             return true;
         var loc = venue.Location;
         return (venue.Name ?? "").Contains(query, StringComparison.OrdinalIgnoreCase)
                || (loc?.World ?? "").Contains(query, StringComparison.OrdinalIgnoreCase)
+               || (loc?.DataCenter ?? "").Contains(query, StringComparison.OrdinalIgnoreCase)
                || (loc?.District ?? "").Contains(query, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void PlaceCombo(string id, string preview, List<string> items, string allLabel, ref string filter, ref string picked)
+    {
+        if (!ImGui.BeginCombo(id, preview))
+            return;
+        ImGui.SetNextItemWidth(-1);
+        ImGui.InputTextWithHint("##filter" + id, "Search", ref filter, 40);
+        if (ImGui.Selectable(allLabel, picked.Length == 0))
+            picked = "";
+        ImGui.Separator();
+        foreach (var item in items)
+        {
+            if (filter.Length > 0 && item.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
+                continue;
+            if (ImGui.Selectable(item, string.Equals(item, picked, StringComparison.OrdinalIgnoreCase)))
+                picked = item;
+        }
+        ImGui.EndCombo();
     }
 
     private static string FlagsLine(VenueListing venue)
