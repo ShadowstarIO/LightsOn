@@ -102,6 +102,7 @@ public sealed class Plugin : IDalamudPlugin
     public void ToggleConfigUi() => configWindow.Toggle();
     public void ToggleMainUi() => mainWindow.Toggle();
     public void Notify(string text) => Chat.Print("[LightsOn] " + text);
+    public bool CanSend => SendBlock() is null;
 
     public ScanResult ScanNow()
     {
@@ -121,14 +122,17 @@ public sealed class Plugin : IDalamudPlugin
             if (force || Venues.Count == 0)
                 StatusLine = "Loading listings…";
             var list = await directory.GetVenues(force, token).ConfigureAwait(true);
-            if (OccupancyClient.IsUsable(Configuration.OccupancyApiUrl))
+            if (Configuration.OccupancyEnabled)
             {
                 try
                 {
                     var map = await occupancy.GetOccupancy(Configuration.OccupancyApiUrl, token).ConfigureAwait(true);
                     foreach (var venue in list)
                     {
-                        if (map.TryGetValue(venue.Id, out var snap))
+                        if (venue?.Id is not { Length: > 0 })
+                            continue;
+                        venue.Occupancy ??= OccupancySnapshot.Unknown;
+                        if (map.TryGetValue(venue.Id, out var snap) && snap is not null)
                             venue.Occupancy = snap;
                     }
                 }
@@ -145,6 +149,15 @@ public sealed class Plugin : IDalamudPlugin
                 {
                     Log.Verbose(ex, "Outdoors fetch failed");
                 }
+            }
+            else
+            {
+                foreach (var venue in list)
+                {
+                    if (venue is not null)
+                        venue.Occupancy = OccupancySnapshot.Unknown;
+                }
+                Outdoors = [];
             }
 
             Venues = list;
@@ -164,7 +177,7 @@ public sealed class Plugin : IDalamudPlugin
 
     public async Task RefreshNotes(VenueListing venue)
     {
-        if (!OccupancyClient.IsUsable(Configuration.OccupancyApiUrl) || !venue.Occupancy.IsHappening)
+        if (!Configuration.OccupancyEnabled || venue.Occupancy?.IsHappening != true)
         {
             venue.Notes = [];
             return;
@@ -183,10 +196,8 @@ public sealed class Plugin : IDalamudPlugin
 
     public async Task<string> TryReport(VenueListing venue, string kind, bool fromAuto = false)
     {
-        if (!Configuration.ReportOptIn)
-            return "Turn on Send reports in Settings first.";
-        if (!OccupancyClient.IsUsable(Configuration.OccupancyApiUrl))
-            return "Set an HTTPS occupancy URL in Settings.";
+        if (SendBlock() is { } blocked)
+            return blocked;
         if (!ClientState.IsLoggedIn || ObjectTable.LocalPlayer is null)
             return "Not logged in.";
         if (!NearbyScan.MatchesVenue(venue))
@@ -265,9 +276,9 @@ public sealed class Plugin : IDalamudPlugin
     {
         if (!Configuration.AllowLogBook)
             return "Log book is off in Settings.";
-        if (!Configuration.ReportOptIn)
-            return "Turn on Send reports first.";
-        if (!venue.Occupancy.IsHappening)
+        if (SendBlock() is { } blocked)
+            return blocked;
+        if (venue.Occupancy?.IsHappening != true)
             return "Log book is only for lanterns lit.";
         if (!NearbyScan.MatchesVenue(venue))
             return "Go to that plot first.";
@@ -310,10 +321,10 @@ public sealed class Plugin : IDalamudPlugin
 
     public async Task<string> TryOutdoor(OutdoorScan scan, bool? privateGathering)
     {
-        if (!Configuration.NoteOutdoorScenes || !Configuration.ReportOptIn)
+        if (!Configuration.NoteOutdoorScenes)
             return "Outdoor notes are off.";
-        if (!OccupancyClient.IsUsable(Configuration.OccupancyApiUrl))
-            return "No occupancy URL.";
+        if (SendBlock() is { } blocked)
+            return blocked;
         if (scan.Tier.Length == 0)
             return "Nothing to note.";
 
@@ -340,6 +351,21 @@ public sealed class Plugin : IDalamudPlugin
             Log.Warning(ex, "Outdoor report failed");
             return "Outdoor note did not reach the server.";
         }
+    }
+
+    private string? SendBlock()
+    {
+        if (Configuration.ListingsOnly)
+            return "Listings only is on. Nothing is sent.";
+        if (!Configuration.ReportOptIn)
+            return "Turn on Send reports in Settings first.";
+        var left = Configuration.ReporterResetLockRemaining;
+        if (left > TimeSpan.Zero)
+        {
+            var mins = Math.Max(1, (int)Math.Ceiling(left.TotalMinutes));
+            return $"Reporter id was reset. Reports wait {mins} more minute{(mins == 1 ? "" : "s")}.";
+        }
+        return null;
     }
 
     private void OnFramework(IFramework framework)
@@ -379,7 +405,7 @@ public sealed class Plugin : IDalamudPlugin
         }
 
         var venue = Session.Hop;
-        if (venue is null || !Configuration.ReportOptIn)
+        if (venue is null || SendBlock() is not null)
             return;
 
         if (Configuration.AutoHappening
@@ -406,7 +432,7 @@ public sealed class Plugin : IDalamudPlugin
 
     private void TickOutdoor()
     {
-        if (!Configuration.NoteOutdoorScenes || !Configuration.ReportOptIn)
+        if (!Configuration.NoteOutdoorScenes || SendBlock() is not null)
             return;
         if (Session.PlotKey.Length > 0)
             return;

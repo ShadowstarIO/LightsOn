@@ -45,6 +45,7 @@ A second tab for moving or street scenes. Short range (a pocket, not a whole cit
 
 ## Settings
 
+- Listings only (hours, no occupancy fetched or sent)
 - Send reports (master opt-in; wrapped-up is locked for 20 minutes after you turn this on)
 - Auto lanterns-lit when you are inside with enough company
 - Prompt when you walk onto a listed plot
@@ -52,7 +53,7 @@ A second tab for moving or street scenes. Short range (a pocket, not a whole cit
 - Count in-character / seeking company / at the bench as extra score
 - Log book
 - Note outdoor scenes
-- Reset reporter id
+- Reset reporter id (reports wait 30 minutes after a reset)
 
 ## Commands
 

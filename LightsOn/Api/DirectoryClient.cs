@@ -31,7 +31,22 @@ internal sealed class DirectoryClient
             return cache;
 
         var list = await http.GetFromJsonAsync<List<VenueListing>>(VenuesUrl, Json, token).ConfigureAwait(false);
-        cache = list ?? [];
+        cache = [];
+        foreach (var venue in list ?? [])
+        {
+            if (venue is null)
+                continue;
+            venue.Id ??= "";
+            venue.Name ??= "";
+            if (venue.Location is not null)
+            {
+                venue.Location.DataCenter ??= "";
+                venue.Location.World ??= "";
+                venue.Location.District ??= "";
+            }
+            venue.Occupancy ??= OccupancySnapshot.Unknown;
+            cache.Add(venue);
+        }
         fetchedAt = DateTimeOffset.UtcNow;
         return cache;
     }

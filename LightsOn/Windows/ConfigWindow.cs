@@ -1,7 +1,7 @@
+using System;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Windowing;
-using LightsOn.Api;
 
 namespace LightsOn.Windows;
 
@@ -25,10 +25,23 @@ public sealed class ConfigWindow : Window
     public override void Draw()
     {
         var cfg = plugin.Configuration;
+        UiTheme.Section("Connection");
+        var listings = cfg.ListingsOnly;
+        if (ImGui.Checkbox("Listings only", ref listings))
+        {
+            cfg.ListingsOnly = listings;
+            cfg.Save();
+            _ = plugin.RefreshVenues(true);
+        }
+        ImGui.TextDisabled("On: hours only, nothing is fetched or sent. Off: occupancy is used.");
+
+        ImGui.Separator();
         UiTheme.Section("Reports");
         ImGui.TextWrapped(Copy.ReportsBlurb);
 
         var optIn = cfg.ReportOptIn;
+        if (cfg.ListingsOnly)
+            ImGui.BeginDisabled();
         if (ImGui.Checkbox("Send reports", ref optIn))
         {
             cfg.SetReportOptIn(optIn);
@@ -42,6 +55,8 @@ public sealed class ConfigWindow : Window
             cfg.AutoHappening = auto;
             cfg.Save();
         }
+        if (cfg.ListingsOnly)
+            ImGui.EndDisabled();
 
         var prompt = cfg.PromptOnEnter;
         if (ImGui.Checkbox("Prompt when you walk onto a listed plot", ref prompt))
@@ -105,27 +120,19 @@ public sealed class ConfigWindow : Window
         ImGui.TextDisabled("Enough company = score 3. Quiet = under that, plus the door/yard.");
 
         ImGui.Separator();
-        UiTheme.Section("Server");
-        ImGui.TextDisabled("HTTPS hostname. Empty = listings only.");
-        var url = cfg.OccupancyApiUrl;
-        ImGui.SetNextItemWidth(-1);
-        if (ImGui.InputText("##api", ref url, 256))
-        {
-            cfg.OccupancyApiUrl = url.Trim();
-            cfg.Save();
-        }
-
-        if (url.Length > 0 && !OccupancyClient.IsUsable(url))
-            ImGui.TextColored(UiTheme.Amber, "Need https:// and a DNS hostname, not an IP.");
-
-        ImGui.Separator();
         UiTheme.Section("Reporter id");
-        ImGui.TextWrapped("Random. Not your character. Reset any time.");
+        ImGui.TextWrapped("Random. Not your character. After a reset, reports wait 30 minutes.");
         ImGui.TextDisabled(ShortId(cfg.ReporterId));
         if (ImGui.Button("Reset reporter id"))
         {
             cfg.ResetReporterId();
             cfg.Save();
+        }
+        var lockLeft = cfg.ReporterResetLockRemaining;
+        if (lockLeft > TimeSpan.Zero)
+        {
+            var mins = Math.Max(1, (int)Math.Ceiling(lockLeft.TotalMinutes));
+            ImGui.TextColored(UiTheme.Amber, $"Reports locked for {mins} more minute{(mins == 1 ? "" : "s")}.");
         }
 
         ImGui.Separator();

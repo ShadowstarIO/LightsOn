@@ -130,9 +130,9 @@ public sealed class MainWindow : Window
         foreach (var venue in rows)
         {
             var loc = venue.Location;
-            var occ = venue.Occupancy;
+            var occ = venue.Occupancy ?? OccupancySnapshot.Unknown;
             var mark = occ.IsHappening ? "● " : occ.IsWrappedUp ? "○ " : "  ";
-            var label = $"{mark}{venue.Name}##{venue.Id}";
+            var label = $"{mark}{venue.Name ?? ""}##{venue.Id}";
             if (ImGui.Selectable(label, venue.Id == selectedId))
                 selectedId = venue.Id;
             ImGui.SameLine();
@@ -161,8 +161,8 @@ public sealed class MainWindow : Window
     private void DrawDetail(VenueListing venue)
     {
         var loc = venue.Location;
-        var occ = venue.Occupancy;
-        ImGui.TextUnformatted(venue.Name);
+        var occ = venue.Occupancy ?? OccupancySnapshot.Unknown;
+        ImGui.TextUnformatted(venue.Name ?? "");
         if (loc is not null)
             ImGui.TextDisabled(loc.Address);
         ImGui.TextDisabled(venue.Sfw ? "SFW listing" : "NSFW listing");
@@ -191,7 +191,7 @@ public sealed class MainWindow : Window
         if (!onPlot)
             ImGui.TextDisabled("Travel to the plot to report.");
 
-        var canReport = onPlot && plugin.Configuration.ReportOptIn;
+        var canReport = onPlot && plugin.CanSend;
         if (!canReport)
             ImGui.BeginDisabled();
         if (ImGui.Button(Copy.HappeningButton))
@@ -202,8 +202,12 @@ public sealed class MainWindow : Window
         if (!canReport)
             ImGui.EndDisabled();
 
-        if (!plugin.Configuration.ReportOptIn)
-            ImGui.TextDisabled("Settings → Send reports.");
+        if (!plugin.CanSend)
+            ImGui.TextDisabled(plugin.Configuration.ListingsOnly
+                ? "Listings only is on."
+                : plugin.Configuration.ReporterResetLockRemaining > TimeSpan.Zero
+                    ? "Reports locked after reporter id reset."
+                    : "Settings → Send reports.");
         if (plugin.ActionLine.Length > 0)
             ImGui.TextWrapped(plugin.ActionLine);
 
@@ -231,7 +235,7 @@ public sealed class MainWindow : Window
             ImGui.TextDisabled(Age(note.At));
         }
 
-        var ready = onPlot && plugin.Configuration.AllowLogBook && plugin.Configuration.ReportOptIn
+        var ready = onPlot && plugin.Configuration.AllowLogBook && plugin.CanSend
                     && plugin.Session.OnPlot >= TimeSpan.FromMinutes(20);
         if (!ready)
         {
@@ -302,17 +306,19 @@ public sealed class MainWindow : Window
 
     private bool Matches(VenueListing venue)
     {
+        if (venue is null)
+            return false;
         if (filter == 1 && venue.Resolution?.IsNow != true)
             return false;
-        if (filter == 2 && !venue.Occupancy.IsHappening)
+        if (filter == 2 && venue.Occupancy?.IsHappening != true)
             return false;
-        if (query.Length == 0)
+        if (string.IsNullOrEmpty(query))
             return true;
         var loc = venue.Location;
-        return venue.Name.Contains(query, StringComparison.OrdinalIgnoreCase)
-               || (loc?.World.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
-               || (loc?.DataCenter.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
-               || (loc?.District.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false);
+        return (venue.Name ?? "").Contains(query, StringComparison.OrdinalIgnoreCase)
+               || (loc?.World ?? "").Contains(query, StringComparison.OrdinalIgnoreCase)
+               || (loc?.DataCenter ?? "").Contains(query, StringComparison.OrdinalIgnoreCase)
+               || (loc?.District ?? "").Contains(query, StringComparison.OrdinalIgnoreCase);
     }
 
     private static int TierRank(string tier) => tier switch
