@@ -26,6 +26,8 @@ Occupancy host: `https://REDACTED`
 
 Reports are **opt-in**. Nothing goes out until you turn **Send reports** on.
 
+The occupancy host stores **reports only**, and only while that listing is in posted hours. The venue directory is read from the public listing API; it is not copied into LightsOn's database.
+
 Never uploaded:
 
 - character names

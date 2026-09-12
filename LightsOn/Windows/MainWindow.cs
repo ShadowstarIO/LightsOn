@@ -144,7 +144,8 @@ public sealed class MainWindow : Window
             var occ = venue.Occupancy ?? OccupancySnapshot.Unknown;
             var open = venue.Resolution?.IsNow == true;
             var mark = occ.IsHappening ? "● " : occ.IsWrappedUp ? "○ " : open ? "· " : "  ";
-            if (ImGui.Selectable($"{mark}{venue.Name ?? ""}##{venue.Id}", venue.Id == selectedId))
+            var name = venue.Name ?? "";
+            if (ImGui.Selectable($"{mark}{name}##{venue.Id}", venue.Id == selectedId))
                 selectedId = venue.Id;
             if (open)
             {
@@ -152,7 +153,10 @@ public sealed class MainWindow : Window
                 ImGui.TextColored(UiTheme.Happening, "open");
             }
             if (loc is not null)
-                ImGui.TextWrapped(loc.Address);
+            {
+                ImGui.SameLine();
+                ImGui.TextDisabled(loc.Address);
+            }
         }
         if (rows.Count == 0)
             ImGui.TextDisabled("No venues match.");
