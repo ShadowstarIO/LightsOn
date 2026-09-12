@@ -21,7 +21,7 @@ public sealed class Session
     public TimeSpan InPocket => PocketKey.Length == 0 ? TimeSpan.Zero : DateTimeOffset.UtcNow - PocketSince;
 }
 
-internal sealed class OutdoorPending
+public sealed class OutdoorPending
 {
     public Scan.OutdoorScan Scan { get; init; }
     public DateTimeOffset At { get; init; } = DateTimeOffset.UtcNow;
