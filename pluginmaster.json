@@ -1,0 +1,27 @@
+[
+  {
+    "Author": "XozaShadow",
+    "Name": "LightsOn",
+    "Punchline": "See if a venue has company — lanterns lit, or wrapped up early.",
+    "Description": "Occupancy for listed FFXIV venues. Scan on the plot; reports are happening or wrapped up early, never names or counts.",
+    "InternalName": "LightsOn",
+    "AssemblyVersion": "0.0.1.0",
+    "TestingAssemblyVersion": "0.0.1.0",
+    "RepoUrl": "https://github.com/XozaShadow/LightsOn",
+    "ApplicableVersion": "any",
+    "DalamudApiLevel": 15,
+    "TestingDalamudApiLevel": 15,
+    "IsHide": false,
+    "IsTestingExclusive": false,
+    "IconUrl": "https://raw.githubusercontent.com/XozaShadow/LightsOn/main/images/icon.png",
+    "DownloadLinkInstall": "https://github.com/XozaShadow/LightsOn/releases/download/v0.0.1.0/LightsOn.zip",
+    "DownloadLinkUpdate": "https://github.com/XozaShadow/LightsOn/releases/download/v0.0.1.0/LightsOn.zip",
+    "DownloadLinkTesting": "https://github.com/XozaShadow/LightsOn/releases/download/v0.0.1.0/LightsOn.zip",
+    "Tags": [
+      "venue",
+      "roleplay",
+      "housing",
+      "occupancy"
+    ]
+  }
+]

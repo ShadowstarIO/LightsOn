@@ -1,0 +1,132 @@
+name: Build LightsOn
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "worker/**"
+      - ".github/workflows/worker.yml"
+  pull_request:
+    paths-ignore:
+      - "worker/**"
+      - ".github/workflows/worker.yml"
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: windows-2022
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.release.target_commitish || github.ref }}
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Read version from csproj
+        id: ver
+        shell: pwsh
+        run: |
+          [xml]$cs = Get-Content LightsOn/LightsOn.csproj
+          $v = $cs.Project.PropertyGroup.Version | Select-Object -First 1
+          if (-not $v) { throw "Version missing from LightsOn.csproj" }
+          $unix = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+          $tag = "${{ github.event.release.tag_name }}"
+          if (-not $tag) { $tag = "v$v" }
+          echo "version=$v" >> $env:GITHUB_OUTPUT
+          echo "unix=$unix" >> $env:GITHUB_OUTPUT
+          echo "tag=$tag" >> $env:GITHUB_OUTPUT
+          Write-Host "Version $v  Tag $tag  LastUpdate $unix"
+
+      - name: Download Dalamud
+        shell: pwsh
+        run: |
+          $dest = "$env:AppData\XIVLauncher\addon\Hooks\dev"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Invoke-WebRequest -Uri https://goatcorp.github.io/dalamud-distrib/latest.zip -OutFile dalamud.zip
+          Expand-Archive -Force dalamud.zip $dest
+
+      - name: Build
+        run: dotnet build LightsOn.slnx --configuration Release -p:RestoreLockedMode=false
+
+      - name: Stage package
+        shell: pwsh
+        run: |
+          $dll = Get-ChildItem -Recurse -Filter LightsOn.dll |
+            Where-Object { $_.FullName -match "\\bin\\" } |
+            Select-Object -First 1
+          if (-not $dll) {
+            Get-ChildItem -Recurse LightsOn | Select-Object FullName
+            throw "LightsOn.dll missing"
+          }
+          $out = "artifacts/LightsOn"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          Copy-Item "$($dll.DirectoryName)\*" $out -Recurse -Force
+          New-Item -ItemType Directory -Force -Path "$out\images" | Out-Null
+          $icon = $null
+          foreach ($candidate in @(
+            "images\icon.png",
+            "$($dll.DirectoryName)\images\icon.png",
+            "$($dll.DirectoryName)\icon.png"
+          )) {
+            if (Test-Path $candidate) { $icon = $candidate; break }
+          }
+          if (-not $icon) { throw "icon.png not found to package" }
+          Copy-Item $icon "$out\images\icon.png" -Force
+          Copy-Item $icon "$out\icon.png" -Force
+          if (-not (Test-Path "$out\LightsOn.dll")) { throw "Copy failed" }
+          Compress-Archive -Path "$out\*" -DestinationPath artifacts/LightsOn.zip -Force
+          Write-Host "Packaged $($dll.FullName) as artifacts/LightsOn.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LightsOn
+          path: |
+            artifacts/LightsOn/**
+            artifacts/LightsOn.zip
+          if-no-files-found: error
+
+      - name: Sync plugin repo
+        if: github.event_name == 'release'
+        shell: pwsh
+        run: |
+          $v = "${{ steps.ver.outputs.version }}"
+          $unix = [int64]"${{ steps.ver.outputs.unix }}"
+          $tag = "${{ steps.ver.outputs.tag }}"
+          $link = "https://github.com/XozaShadow/LightsOn/releases/download/$tag/LightsOn.zip"
+          foreach ($path in @("pluginmaster.json", "repo.json")) {
+            $raw = Get-Content $path -Raw | ConvertFrom-Json
+            $entry = if ($raw -is [System.Array]) { $raw[0] } else { $raw }
+            $entry.AssemblyVersion = $v
+            $entry.TestingAssemblyVersion = $v
+            $entry.DownloadLinkInstall = $link
+            $entry.DownloadLinkUpdate = $link
+            $entry.DownloadLinkTesting = $link
+            if ($entry.PSObject.Properties.Name -contains "LastUpdate") {
+              $entry.LastUpdate = $unix
+            }
+            $json = ConvertTo-Json -InputObject @($entry) -Depth 8
+            if (-not $json.TrimStart().StartsWith('[')) {
+              $json = "[`n" + $json + "`n]"
+            }
+            [IO.File]::WriteAllText((Resolve-Path $path), $json.TrimEnd() + "`n")
+          }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pluginmaster.json repo.json
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "testing: $v manifests [skip ci]"
+            git push origin HEAD:main
+          }
+
+      - name: Attach LightsOn.zip to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/LightsOn.zip

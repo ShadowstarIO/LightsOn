@@ -20,7 +20,7 @@ internal static class FriendBook
                 {
                     if (entry.ContentId == 0)
                         continue;
-                    var name = entry.Name.ToString();
+                    var name = entry.Name.ToString().Trim();
                     if (!string.IsNullOrWhiteSpace(name))
                         names.Add(name);
                 }

@@ -56,8 +56,8 @@ internal static class NearbyScan
         var who = excludeFriends || excludeFc ? "after filters" : "nearby";
         var met = counted >= ScanResult.Threshold;
         var summary = met
-            ? $"3+ {who} · {here.Summary}"
-            : $"under 3 {who} · {here.Summary}";
+            ? $"{Copy.EnoughCompany} ({who}) · {here.Summary}"
+            : $"{Copy.Quiet} ({who}) · {here.Summary}";
         return new ScanResult(true, here.Inside, met, summary);
     }
 
