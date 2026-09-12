@@ -3,11 +3,12 @@ const RATE_MS = 20 * 60 * 1000;
 const HISTORY_MS = 14 * 24 * 60 * 60 * 1000;
 const NOTE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 const NOTE_RATE_MS = 24 * 60 * 60 * 1000;
-const VENUE_REFRESH_MS = 30 * 60 * 1000;
 const MAX_BODY = 8 * 1024;
 const VENUES_URL = "https://api.ffxivvenues.com/venue";
 const UA = "LightsOn/0.0.3.3 (+https://github.com/XozaShadow/LightsOn)";
 const TIER_RANK = { extremely_busy: 3, some_activity: 2, some_wandering: 1 };
+const venueCache = new Map();
+let migrateTried = false;
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -22,12 +23,13 @@ export default {
       return new Response(null, { status: 204, headers: CORS });
 
     try {
-      await migrate(env);
       const url = new URL(request.url);
       if (request.method === "GET" && url.pathname === "/")
         return json({ name: "LightsOn", windowMinutes: 20, occupancy: "/v1/occupancy" });
       if (request.method === "GET" && url.pathname === "/v1/health")
         return json(await health(env));
+      if (request.method === "POST")
+        await migrate(env);
       if (request.method === "GET" && url.pathname === "/v1/occupancy")
         return cachedGet(request, ctx, 60, () => getOccupancy(env, url.searchParams));
       if (request.method === "GET" && url.pathname === "/v1/outdoors")
@@ -51,7 +53,6 @@ export default {
 
   async scheduled(_event, env) {
     await migrate(env);
-    await maybeRefreshVenues(env);
     await pruneClosed(env);
     await recomputeAll(env);
     const cutoff = new Date(Date.now() - HISTORY_MS).toISOString();
@@ -113,29 +114,31 @@ async function health(env) {
 
 async function getOccupancy(env, params) {
   const now = new Date().toISOString();
-  const dc = (params.get("dc") || "").trim();
-  const world = (params.get("world") || "").trim();
-  let sql = `
-    SELECT o.venue_id AS venueId, o.state, o.happening_reports AS happeningReports,
-           o.wrapped_up_reports AS wrappedUpReports,
-           o.interior_happening AS interiorHappening, o.interior_wrapped AS interiorWrapped,
-           o.exterior_happening AS exteriorHappening, o.exterior_wrapped AS exteriorWrapped,
-           o.door_locked AS doorLocked, o.both_layers AS bothLayers,
-           o.updated_at AS updatedAt, o.expires_at AS expiresAt
-    FROM occupancy o
-    LEFT JOIN venues v ON v.id = o.venue_id
-    WHERE o.expires_at > ?`;
-  const binds = [now];
-  if (world) {
-    sql += " AND v.world = ? COLLATE NOCASE";
-    binds.push(world);
+  void params;
+  try {
+    const { results } = await env.DB.prepare(
+      `SELECT o.venue_id AS venueId, o.state, o.happening_reports AS happeningReports,
+              o.wrapped_up_reports AS wrappedUpReports,
+              o.interior_happening AS interiorHappening, o.interior_wrapped AS interiorWrapped,
+              o.exterior_happening AS exteriorHappening, o.exterior_wrapped AS exteriorWrapped,
+              o.door_locked AS doorLocked, o.both_layers AS bothLayers,
+              o.updated_at AS updatedAt, o.expires_at AS expiresAt
+       FROM occupancy o
+       WHERE o.expires_at > ?
+       ORDER BY o.updated_at DESC LIMIT 200`,
+    ).bind(now).all();
+    return mapOccupancy(results);
+  } catch {
+    const { results } = await env.DB.prepare(
+      `SELECT venue_id AS venueId, state, happening_reports AS happeningReports,
+              wrapped_up_reports AS wrappedUpReports, updated_at AS updatedAt, expires_at AS expiresAt
+       FROM occupancy WHERE expires_at > ? ORDER BY updated_at DESC LIMIT 200`,
+    ).bind(now).all();
+    return mapOccupancy(results);
   }
-  if (dc) {
-    sql += " AND v.data_center = ? COLLATE NOCASE";
-    binds.push(dc);
-  }
-  sql += " ORDER BY o.updated_at DESC LIMIT 200";
-  const { results } = await env.DB.prepare(sql).bind(...binds).all();
+}
+
+function mapOccupancy(results) {
   return (results ?? []).map((row) => ({
     venueId: row.venueId,
     state: row.state,
@@ -160,8 +163,7 @@ async function postReport(env, request) {
   if (err)
     return json({ error: err }, 400);
 
-  await ensureVenues(env);
-  const venue = await env.DB.prepare("SELECT * FROM venues WHERE id = ?").bind(body.venueId).first();
+  const venue = await lookupVenue(body.venueId);
   if (!venue)
     return json({ error: "unknown venue" }, 400);
   if (!plotMatches(venue, body.proof))
@@ -178,26 +180,48 @@ async function postReport(env, request) {
   if (recent)
     return json({ error: "already reported this layer recently" }, 429);
 
-  await env.DB.prepare(
-    `INSERT INTO reports (venue_id, kind, reporter_id, at, world, district, ward, plot, subdivision, inside, threshold_met, door_locked, voices, glance, music, source)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'plugin')`,
-  ).bind(
-    body.venueId,
-    body.kind,
-    body.reporterId,
-    at.toISOString(),
-    String(proof.world).trim(),
-    String(proof.district || "").trim(),
-    Number(proof.ward),
-    Number(proof.plot),
-    proof.subdivision ? 1 : 0,
-    inside,
-    proof.thresholdMet ? 1 : 0,
-    proof.doorLocked ? 1 : 0,
-    proof.voices ? 1 : 0,
-    proof.glance ? 1 : 0,
-    proof.music ? 1 : 0,
-  ).run();
+  try {
+    await env.DB.prepare(
+      `INSERT INTO reports (venue_id, kind, reporter_id, at, world, district, ward, plot, subdivision, inside, threshold_met, door_locked, voices, glance, music, source)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'plugin')`,
+    ).bind(
+      body.venueId,
+      body.kind,
+      body.reporterId,
+      at.toISOString(),
+      String(proof.world).trim(),
+      String(proof.district || "").trim(),
+      Number(proof.ward),
+      Number(proof.plot),
+      proof.subdivision ? 1 : 0,
+      inside,
+      proof.thresholdMet ? 1 : 0,
+      proof.doorLocked ? 1 : 0,
+      proof.voices ? 1 : 0,
+      proof.glance ? 1 : 0,
+      proof.music ? 1 : 0,
+    ).run();
+  } catch (err) {
+    const msg = String(err && err.message ? err.message : err);
+    if (!/no such column/i.test(msg))
+      throw err;
+    await env.DB.prepare(
+      `INSERT INTO reports (venue_id, kind, reporter_id, at, world, district, ward, plot, subdivision, inside, threshold_met, source)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'plugin')`,
+    ).bind(
+      body.venueId,
+      body.kind,
+      body.reporterId,
+      at.toISOString(),
+      String(proof.world).trim(),
+      String(proof.district || "").trim(),
+      Number(proof.ward),
+      Number(proof.plot),
+      proof.subdivision ? 1 : 0,
+      inside,
+      proof.thresholdMet ? 1 : 0,
+    ).run();
+  }
 
   await coalesceVenue(env, body.venueId);
   const occupancy = await env.DB.prepare(
@@ -261,8 +285,7 @@ async function postNote(env, request) {
   if (!occ || occ.state !== "happening")
     return json({ error: "log book only while lanterns are lit" }, 400);
 
-  await ensureVenues(env);
-  const venue = await env.DB.prepare("SELECT * FROM venues WHERE id = ?").bind(body.venueId).first();
+  const venue = await lookupVenue(body.venueId);
   if (!venue || !plotMatches(venue, body.proof))
     return json({ error: "proof does not match listed plot" }, 400);
 
@@ -538,57 +561,26 @@ async function recomputeAll(env) {
     await coalesceVenue(env, row.venue_id);
 }
 
-async function ensureVenues(env) {
-  const row = await env.DB.prepare("SELECT COUNT(*) AS n FROM venues").first();
-  if ((row?.n ?? 0) === 0)
-    await refreshVenues(env);
-}
-
-async function maybeRefreshVenues(env) {
-  const row = await env.DB.prepare("SELECT v FROM meta WHERE k = 'venues_at'").first();
-  const last = row?.v ? Date.parse(row.v) : 0;
-  if (Number.isFinite(last) && Date.now() - last < VENUE_REFRESH_MS)
-    return;
-  await refreshVenues(env);
-}
-
-async function refreshVenues(env) {
-  const res = await fetch(VENUES_URL, { headers: { "User-Agent": UA } });
+async function lookupVenue(id) {
+  const cached = venueCache.get(id);
+  if (cached && Date.now() - cached.at < 30 * 60 * 1000)
+    return cached.row;
+  const res = await fetch(`${VENUES_URL}/${encodeURIComponent(id)}`, { headers: { "User-Agent": UA } });
   if (!res.ok)
-    throw new Error(`venues ${res.status}`);
-  const list = await res.json();
-  if (!Array.isArray(list) || list.length === 0)
-    return;
-
-  const now = new Date().toISOString();
-  const stmts = [env.DB.prepare("DELETE FROM venues")];
-  for (const v of list) {
-    if (!v?.id || !v?.name || !v.location)
-      continue;
-    const loc = v.location;
-    stmts.push(
-      env.DB.prepare(
-        `INSERT INTO venues (id, name, data_center, world, district, ward, plot, subdivision, open_now, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ).bind(
-        String(v.id),
-        String(v.name),
-        String(loc.dataCenter || ""),
-        String(loc.world || ""),
-        String(loc.district || ""),
-        Number(loc.ward) || 0,
-        Number(loc.plot) || 0,
-        loc.subdivision ? 1 : 0,
-        venueIsOpen(v) ? 1 : 0,
-        now,
-      ),
-    );
-  }
-  for (let i = 0; i < stmts.length; i += 40)
-    await env.DB.batch(stmts.slice(i, i + 40));
-  await env.DB.prepare("INSERT INTO meta (k, v) VALUES ('venues_at', ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v")
-    .bind(now).run();
-  await pruneClosed(env);
+    return null;
+  const v = await res.json();
+  const loc = v.location || {};
+  const row = {
+    id: String(v.id || id),
+    world: String(loc.world || ""),
+    district: String(loc.district || ""),
+    ward: Number(loc.ward) || 0,
+    plot: Number(loc.plot) || 0,
+    subdivision: loc.subdivision ? 1 : 0,
+    open_now: venueIsOpen(v) ? 1 : 0,
+  };
+  venueCache.set(id, { at: Date.now(), row });
+  return row;
 }
 
 function venueIsOpen(v) {
@@ -597,21 +589,26 @@ function venueIsOpen(v) {
 }
 
 async function pruneClosed(env) {
-  const open = await env.DB.prepare("SELECT COUNT(*) AS n FROM venues WHERE open_now = 1").first();
-  if ((open?.n ?? 0) === 0)
-    return;
-  await env.DB.prepare(
-    "DELETE FROM reports WHERE venue_id IN (SELECT id FROM venues WHERE open_now = 0)",
-  ).run();
+  const since = new Date(Date.now() - WINDOW_MS).toISOString();
+  const { results } = await env.DB.prepare(
+    "SELECT DISTINCT venue_id FROM reports WHERE at >= ?",
+  ).bind(since).all();
+  for (const row of results ?? []) {
+    const venue = await lookupVenue(row.venue_id);
+    if (venue && !venue.open_now)
+      await env.DB.prepare("DELETE FROM reports WHERE venue_id = ?").bind(row.venue_id).run();
+  }
 }
 
 async function migrate(env) {
+  if (migrateTried)
+    return;
+  migrateTried = true;
   const cols = [
     ["reports", "door_locked"],
     ["reports", "voices"],
     ["reports", "glance"],
     ["reports", "music"],
-    ["venues", "open_now"],
     ["occupancy", "interior_happening"],
     ["occupancy", "interior_wrapped"],
     ["occupancy", "exterior_happening"],
@@ -619,8 +616,13 @@ async function migrate(env) {
     ["occupancy", "door_locked"],
     ["occupancy", "both_layers"],
   ];
-  for (const [table, col] of cols)
-    await ensureColumn(env, table, col);
+  for (const [table, col] of cols) {
+    try {
+      await ensureColumn(env, table, col);
+    } catch (err) {
+      console.error("migrate", table, col, err);
+    }
+  }
 }
 
 async function ensureColumn(env, table, col) {

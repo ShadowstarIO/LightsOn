@@ -396,6 +396,9 @@ public sealed class Plugin : IDalamudPlugin
     private static string FriendlyReportError(Exception ex)
     {
         var msg = ex.Message ?? "";
+        if (msg.Contains("write limit", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("free tier", StringComparison.OrdinalIgnoreCase))
+            return "Occupancy server is at today's write cap. Reports wait until midnight UTC.";
         if (msg.Contains("already reported", StringComparison.OrdinalIgnoreCase))
             return "This layer was already reported in the last 20 minutes.";
         if (msg.Contains("proof does not match", StringComparison.OrdinalIgnoreCase))
