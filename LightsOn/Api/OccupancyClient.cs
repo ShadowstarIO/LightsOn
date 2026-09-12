@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -51,7 +52,7 @@ internal sealed class OccupancyClient
     {
         var url = baseUrl.Trim().TrimEnd('/') + "/v1/reports";
         using var res = await http.PostAsJsonAsync(url, report, Json, token).ConfigureAwait(false);
-        res.EnsureSuccessStatusCode();
+        await EnsureOk(res).ConfigureAwait(false);
     }
 
     public async Task<List<GuestNote>> GetNotes(string baseUrl, string venueId, CancellationToken token)
@@ -64,7 +65,7 @@ internal sealed class OccupancyClient
     {
         var url = baseUrl.Trim().TrimEnd('/') + "/v1/notes";
         using var res = await http.PostAsJsonAsync(url, note, Json, token).ConfigureAwait(false);
-        res.EnsureSuccessStatusCode();
+        await EnsureOk(res).ConfigureAwait(false);
     }
 
     public async Task<List<OutdoorSnapshot>> GetOutdoors(string baseUrl, CancellationToken token)
@@ -77,6 +78,26 @@ internal sealed class OccupancyClient
     {
         var url = baseUrl.Trim().TrimEnd('/') + "/v1/outdoors";
         using var res = await http.PostAsJsonAsync(url, report, Json, token).ConfigureAwait(false);
-        res.EnsureSuccessStatusCode();
+        await EnsureOk(res).ConfigureAwait(false);
+    }
+
+    private static async Task EnsureOk(HttpResponseMessage res)
+    {
+        if (res.IsSuccessStatusCode)
+            return;
+        var raw = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
+        var msg = "server error";
+        try
+        {
+            using var doc = JsonDocument.Parse(raw);
+            if (doc.RootElement.TryGetProperty("error", out var err))
+                msg = err.GetString() ?? msg;
+        }
+        catch
+        {
+            if (!string.IsNullOrWhiteSpace(raw) && raw.Length < 200)
+                msg = raw.Trim();
+        }
+        throw new HttpRequestException(msg, null, res.StatusCode);
     }
 }

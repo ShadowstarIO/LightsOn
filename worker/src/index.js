@@ -6,7 +6,7 @@ const NOTE_RATE_MS = 24 * 60 * 60 * 1000;
 const VENUE_REFRESH_MS = 30 * 60 * 1000;
 const MAX_BODY = 8 * 1024;
 const VENUES_URL = "https://api.ffxivvenues.com/venue";
-const UA = "LightsOn/0.0.3.2 (+https://github.com/XozaShadow/LightsOn)";
+const UA = "LightsOn/0.0.3.3 (+https://github.com/XozaShadow/LightsOn)";
 const TIER_RANK = { extremely_busy: 3, some_activity: 2, some_wandering: 1 };
 
 const CORS = {
@@ -45,7 +45,7 @@ export default {
       return json({ error: "not found" }, 404);
     } catch (err) {
       console.error(err);
-      return json({ error: "server error" }, 500);
+      return json({ error: String(err && err.message ? err.message : err) }, 500);
     }
   },
 
@@ -78,16 +78,22 @@ async function limited(request, fn) {
 }
 
 async function cachedGet(request, ctx, ttlSec, builder) {
-  const cache = caches.default;
-  const key = new Request(request.url, { method: "GET" });
-  const hit = await cache.match(key);
-  if (hit)
-    return hit;
-  const body = await builder();
-  const res = json(body);
-  res.headers.set("Cache-Control", `public, max-age=${ttlSec}`);
-  ctx.waitUntil(cache.put(key, res.clone()));
-  return res;
+  try {
+    const cache = caches.default;
+    const key = new Request(request.url, { method: "GET" });
+    const hit = await cache.match(key);
+    if (hit)
+      return hit;
+    const body = await builder();
+    const res = json(body);
+    res.headers.set("Cache-Control", `public, max-age=${ttlSec}`);
+    if (ctx && typeof ctx.waitUntil === "function")
+      ctx.waitUntil(cache.put(key, res.clone()).catch(() => {}));
+    return res;
+  } catch (err) {
+    console.error(err);
+    return json(await builder());
+  }
 }
 
 function json(body, status = 200) {
@@ -591,31 +597,36 @@ function venueIsOpen(v) {
 }
 
 async function pruneClosed(env) {
+  const open = await env.DB.prepare("SELECT COUNT(*) AS n FROM venues WHERE open_now = 1").first();
+  if ((open?.n ?? 0) === 0)
+    return;
   await env.DB.prepare(
     "DELETE FROM reports WHERE venue_id IN (SELECT id FROM venues WHERE open_now = 0)",
   ).run();
 }
 
 async function migrate(env) {
-  const alters = [
-    "ALTER TABLE reports ADD COLUMN door_locked INTEGER NOT NULL DEFAULT 0",
-    "ALTER TABLE reports ADD COLUMN voices INTEGER NOT NULL DEFAULT 0",
-    "ALTER TABLE reports ADD COLUMN glance INTEGER NOT NULL DEFAULT 0",
-    "ALTER TABLE reports ADD COLUMN music INTEGER NOT NULL DEFAULT 0",
-    "ALTER TABLE venues ADD COLUMN open_now INTEGER NOT NULL DEFAULT 0",
-    "ALTER TABLE occupancy ADD COLUMN interior_happening INTEGER NOT NULL DEFAULT 0",
-    "ALTER TABLE occupancy ADD COLUMN interior_wrapped INTEGER NOT NULL DEFAULT 0",
-    "ALTER TABLE occupancy ADD COLUMN exterior_happening INTEGER NOT NULL DEFAULT 0",
-    "ALTER TABLE occupancy ADD COLUMN exterior_wrapped INTEGER NOT NULL DEFAULT 0",
-    "ALTER TABLE occupancy ADD COLUMN door_locked INTEGER NOT NULL DEFAULT 0",
-    "ALTER TABLE occupancy ADD COLUMN both_layers INTEGER NOT NULL DEFAULT 0",
+  const cols = [
+    ["reports", "door_locked"],
+    ["reports", "voices"],
+    ["reports", "glance"],
+    ["reports", "music"],
+    ["venues", "open_now"],
+    ["occupancy", "interior_happening"],
+    ["occupancy", "interior_wrapped"],
+    ["occupancy", "exterior_happening"],
+    ["occupancy", "exterior_wrapped"],
+    ["occupancy", "door_locked"],
+    ["occupancy", "both_layers"],
   ];
-  for (const sql of alters) {
-    try {
-      await env.DB.prepare(sql).run();
-    } catch {
-      // column already exists
-    }
-  }
+  for (const [table, col] of cols)
+    await ensureColumn(env, table, col);
+}
+
+async function ensureColumn(env, table, col) {
+  const { results } = await env.DB.prepare(`PRAGMA table_info(${table})`).all();
+  if ((results || []).some((row) => row.name === col))
+    return;
+  await env.DB.prepare(`ALTER TABLE ${table} ADD COLUMN ${col} INTEGER DEFAULT 0`).run();
 }
 
