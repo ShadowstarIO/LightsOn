@@ -14,20 +14,20 @@ public sealed class MainWindow : Window
     private string query = "";
     private int filter;
     private string? selectedId;
-    private string actionLine = "";
-
+    private string noteDraft = "";
+    private string? notesFor;
     private static readonly string[] Filters = ["All", "Marked open", "Lanterns lit"];
 
     public MainWindow(Plugin plugin)
         : base("LightsOn###LightsOnMain")
     {
         this.plugin = plugin;
-        Size = new Vector2(720, 520);
+        Size = new Vector2(760, 560);
         SizeCondition = ImGuiCond.FirstUseEver;
         SizeConstraints = new WindowSizeConstraints
         {
-            MinimumSize = new Vector2(560, 360),
-            MaximumSize = new Vector2(1100, 900),
+            MinimumSize = new Vector2(580, 380),
+            MaximumSize = new Vector2(1100, 920),
         };
     }
 
@@ -45,6 +45,66 @@ public sealed class MainWindow : Window
             ImGui.Separator();
         }
 
+        DrawHop();
+        DrawPrivateAsk();
+
+        if (ImGui.BeginTabBar("lo-tabs"))
+        {
+            if (ImGui.BeginTabItem("Venues"))
+            {
+                DrawVenues();
+                ImGui.EndTabItem();
+            }
+            if (ImGui.BeginTabItem("Outdoors"))
+            {
+                DrawOutdoors();
+                ImGui.EndTabItem();
+            }
+            ImGui.EndTabBar();
+        }
+    }
+
+    private void DrawHop()
+    {
+        var venue = plugin.Session.Hop;
+        if (venue is null || plugin.Session.HopDismissed || !plugin.Configuration.PromptOnEnter)
+            return;
+        if (!NearbyScan.MatchesVenue(venue))
+            return;
+
+        var hours = venue.Resolution?.IsNow == true ? Copy.MarkedOpen : "listed, not in posted hours";
+        ImGui.TextWrapped($"{venue.Name} — {hours}. Checking the plot…");
+        ImGui.TextDisabled(plugin.LastScanLine);
+        if (ImGui.SmallButton(Copy.HappeningButton))
+            _ = Report(venue, "happening");
+        ImGui.SameLine();
+        if (ImGui.SmallButton(Copy.WrappedButton))
+            _ = Report(venue, "wrapped_up");
+        ImGui.SameLine();
+        if (ImGui.SmallButton("Not now"))
+            plugin.Session.HopDismissed = true;
+        ImGui.Separator();
+    }
+
+    private void DrawPrivateAsk()
+    {
+        var pending = plugin.Session.OutdoorPrivate;
+        if (pending is null)
+            return;
+        ImGui.TextWrapped("Most of the company here looks like friends or Free Company. Is this a private gathering?");
+        if (ImGui.SmallButton("Yes, keep it off the list"))
+            _ = plugin.TryOutdoor(pending.Scan, true);
+        ImGui.SameLine();
+        if (ImGui.SmallButton("No, it's public"))
+            _ = plugin.TryOutdoor(pending.Scan, false);
+        ImGui.SameLine();
+        if (ImGui.SmallButton("Skip"))
+            plugin.Session.OutdoorPrivate = null;
+        ImGui.Separator();
+    }
+
+    private void DrawVenues()
+    {
         UiTheme.Section("Venues");
         ImGui.SameLine();
         ImGui.TextDisabled(plugin.StatusLine);
@@ -73,8 +133,7 @@ public sealed class MainWindow : Window
             var occ = venue.Occupancy;
             var mark = occ.IsHappening ? "● " : occ.IsWrappedUp ? "○ " : "  ";
             var label = $"{mark}{venue.Name}##{venue.Id}";
-            var isSel = venue.Id == selectedId;
-            if (ImGui.Selectable(label, isSel))
+            if (ImGui.Selectable(label, venue.Id == selectedId))
                 selectedId = venue.Id;
             ImGui.SameLine();
             if (occ.IsHappening)
@@ -120,13 +179,9 @@ public sealed class MainWindow : Window
             ImGui.TextDisabled(WrappedLabel(occ));
         }
         else if (venue.Resolution?.IsNow == true)
-        {
             ImGui.TextColored(UiTheme.Amber, $"{Copy.MarkedOpen} — {Copy.NoReport}");
-        }
         else
-        {
             ImGui.TextDisabled(Copy.NoReport);
-        }
 
         ImGui.Spacing();
         UiTheme.Section("On this plot", true);
@@ -149,14 +204,100 @@ public sealed class MainWindow : Window
 
         if (!plugin.Configuration.ReportOptIn)
             ImGui.TextDisabled("Settings → Send reports.");
-        if (actionLine.Length > 0)
-            ImGui.TextWrapped(actionLine);
+        if (plugin.ActionLine.Length > 0)
+            ImGui.TextWrapped(plugin.ActionLine);
+
+        if (occ.IsHappening)
+            DrawLogBook(venue, onPlot);
+    }
+
+    private void DrawLogBook(VenueListing venue, bool onPlot)
+    {
+        ImGui.Spacing();
+        UiTheme.Section("Log book", true);
+        ImGui.TextDisabled(Copy.LogBookHint);
+        if (notesFor != venue.Id)
+        {
+            notesFor = venue.Id;
+            _ = plugin.RefreshNotes(venue);
+        }
+
+        if (venue.Notes.Count == 0)
+            ImGui.TextDisabled("No notes tonight.");
+        foreach (var note in venue.Notes)
+        {
+            ImGui.BulletText(note.Text);
+            ImGui.SameLine();
+            ImGui.TextDisabled(Age(note.At));
+        }
+
+        var ready = onPlot && plugin.Configuration.AllowLogBook && plugin.Configuration.ReportOptIn
+                    && plugin.Session.OnPlot >= TimeSpan.FromMinutes(20);
+        if (!ready)
+        {
+            ImGui.TextDisabled("Stay about 20 minutes with the lanterns lit to leave a note.");
+            return;
+        }
+
+        ImGui.SetNextItemWidth(-1);
+        ImGui.InputTextWithHint("##note", "great music, kind host…", ref noteDraft, 80);
+        if (ImGui.Button("Leave note") && noteDraft.Trim().Length > 0)
+        {
+            var text = noteDraft;
+            noteDraft = "";
+            _ = LeaveNote(venue, text);
+        }
+    }
+
+    private void DrawOutdoors()
+    {
+        UiTheme.Section("Outdoors");
+        ImGui.SameLine();
+        if (ImGui.SmallButton("Settings"))
+            plugin.ToggleConfigUi();
+        ImGui.TextWrapped(Copy.OutdoorsHint);
+        if (!plugin.Configuration.NoteOutdoorScenes)
+            ImGui.TextDisabled("Settings → Note outdoor scenes to contribute. You can still read the list.");
+
+        var rows = plugin.Outdoors
+            .OrderBy(o => TierRank(o.Tier))
+            .ThenByDescending(o => o.UpdatedAt)
+            .ToList();
+        if (rows.Count == 0)
+        {
+            ImGui.TextDisabled("No outdoor scenes noted in the last 20 minutes.");
+            return;
+        }
+
+        string? world = null;
+        foreach (var row in rows)
+        {
+            if (world != row.World)
+            {
+                world = row.World;
+                UiTheme.Section(world, true);
+            }
+            ImGui.TextColored(UiTheme.Happening, NearbyScan.TierLabel(row.Tier));
+            ImGui.SameLine();
+            ImGui.TextUnformatted(row.Place);
+            if (row.InCharacter)
+            {
+                ImGui.SameLine();
+                ImGui.TextColored(UiTheme.Teal, "in character");
+            }
+            ImGui.TextDisabled($"{row.Reports} note{(row.Reports == 1 ? "" : "s")} · {Age(row.UpdatedAt)}");
+        }
     }
 
     private async System.Threading.Tasks.Task Report(VenueListing venue, string kind)
     {
-        actionLine = "Scanning…";
-        actionLine = await plugin.TryReport(venue, kind).ConfigureAwait(true);
+        plugin.ActionLine = "Scanning…";
+        plugin.ActionLine = await plugin.TryReport(venue, kind).ConfigureAwait(true);
+    }
+
+    private async System.Threading.Tasks.Task LeaveNote(VenueListing venue, string text)
+    {
+        plugin.ActionLine = await plugin.TryNote(venue, text).ConfigureAwait(true);
     }
 
     private bool Matches(VenueListing venue)
@@ -173,6 +314,14 @@ public sealed class MainWindow : Window
                || (loc?.DataCenter.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false)
                || (loc?.District.Contains(query, StringComparison.OrdinalIgnoreCase) ?? false);
     }
+
+    private static int TierRank(string tier) => tier switch
+    {
+        "extremely_busy" => 0,
+        "some_activity" => 1,
+        "some_wandering" => 2,
+        _ => 3,
+    };
 
     private static string HappeningLabel(OccupancySnapshot occ)
         => $"{occ.HappeningReports} report{(occ.HappeningReports == 1 ? "" : "s")} · {Age(occ.UpdatedAt)}";

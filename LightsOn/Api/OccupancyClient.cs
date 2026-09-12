@@ -47,4 +47,30 @@ internal sealed class OccupancyClient
         using var res = await http.PostAsJsonAsync(url, report, Json, token).ConfigureAwait(false);
         res.EnsureSuccessStatusCode();
     }
+
+    public async Task<List<GuestNote>> GetNotes(string baseUrl, string venueId, CancellationToken token)
+    {
+        var url = baseUrl.Trim().TrimEnd('/') + "/v1/notes?venueId=" + Uri.EscapeDataString(venueId);
+        return await http.GetFromJsonAsync<List<GuestNote>>(url, Json, token).ConfigureAwait(false) ?? [];
+    }
+
+    public async Task PostNote(string baseUrl, NotePost note, CancellationToken token)
+    {
+        var url = baseUrl.Trim().TrimEnd('/') + "/v1/notes";
+        using var res = await http.PostAsJsonAsync(url, note, Json, token).ConfigureAwait(false);
+        res.EnsureSuccessStatusCode();
+    }
+
+    public async Task<List<OutdoorSnapshot>> GetOutdoors(string baseUrl, CancellationToken token)
+    {
+        var url = baseUrl.Trim().TrimEnd('/') + "/v1/outdoors";
+        return await http.GetFromJsonAsync<List<OutdoorSnapshot>>(url, Json, token).ConfigureAwait(false) ?? [];
+    }
+
+    public async Task PostOutdoor(string baseUrl, OutdoorReport report, CancellationToken token)
+    {
+        var url = baseUrl.Trim().TrimEnd('/') + "/v1/outdoors";
+        using var res = await http.PostAsJsonAsync(url, report, Json, token).ConfigureAwait(false);
+        res.EnsureSuccessStatusCode();
+    }
 }

@@ -13,12 +13,12 @@ public sealed class ConfigWindow : Window
         : base("LightsOn · settings###LightsOnConfig")
     {
         this.plugin = plugin;
-        Size = new Vector2(480, 560);
+        Size = new Vector2(500, 640);
         SizeCondition = ImGuiCond.FirstUseEver;
         SizeConstraints = new WindowSizeConstraints
         {
-            MinimumSize = new Vector2(400, 360),
-            MaximumSize = new Vector2(640, 860),
+            MinimumSize = new Vector2(420, 400),
+            MaximumSize = new Vector2(660, 900),
         };
     }
 
@@ -31,10 +31,26 @@ public sealed class ConfigWindow : Window
         var optIn = cfg.ReportOptIn;
         if (ImGui.Checkbox("Send reports", ref optIn))
         {
-            cfg.ReportOptIn = optIn;
+            cfg.SetReportOptIn(optIn);
             cfg.HasSeenWelcome = true;
             cfg.Save();
         }
+
+        var auto = cfg.AutoHappening;
+        if (ImGui.Checkbox("Auto lanterns-lit when enough company inside", ref auto))
+        {
+            cfg.AutoHappening = auto;
+            cfg.Save();
+        }
+
+        var prompt = cfg.PromptOnEnter;
+        if (ImGui.Checkbox("Prompt when you walk onto a listed plot", ref prompt))
+        {
+            cfg.PromptOnEnter = prompt;
+            cfg.Save();
+        }
+
+        ImGui.TextDisabled("Wrapped up early always asks twice, needs a few minutes on the plot, and waits 20 minutes after you turn reports on.");
 
         var friends = cfg.ExcludeFriends;
         if (ImGui.Checkbox("Leave friends out of company", ref friends))
@@ -50,18 +66,43 @@ public sealed class ConfigWindow : Window
             cfg.Save();
         }
 
+        var status = cfg.UseStatusSignals;
+        if (ImGui.Checkbox("Count in-character / seeking company / at the bench as extra company", ref status))
+        {
+            cfg.UseStatusSignals = status;
+            cfg.Save();
+        }
+
+        ImGui.Separator();
+        UiTheme.Section("Log book");
+        ImGui.TextWrapped(Copy.LogBookHint);
+        var book = cfg.AllowLogBook;
+        if (ImGui.Checkbox("Allow log-book notes", ref book))
+        {
+            cfg.AllowLogBook = book;
+            cfg.Save();
+        }
+
+        ImGui.Separator();
+        UiTheme.Section("Outdoors");
+        ImGui.TextWrapped(Copy.OutdoorsHint);
+        var outdoors = cfg.NoteOutdoorScenes;
+        if (ImGui.Checkbox("Note outdoor scenes", ref outdoors))
+        {
+            cfg.NoteOutdoorScenes = outdoors;
+            cfg.Save();
+        }
+
         ImGui.Separator();
         UiTheme.Section("What the lantern reads");
-        ImGui.TextWrapped("Sits between OOC and IC. This build scores patrons only.");
-        Line("Patron", "Another person on the plot. In-game: other PCs. 1 each, cap 3.");
-        Line("In character", "Role-Playing status. Later.");
-        Line("Seeking company", "Looking for Party. Later.");
-        Line("A gathering is posted", "Party Finder. Later.");
-        Line("At the bench", "Melding Materia. Later.");
-        Line("Someone reached out", "A /tell from someone on this plot. Later.");
-        Line("An exchange", "A trade here. Later.");
-        Line("Voices nearby", "Say from this plot. Off unless you turn it on. Later.");
-        ImGui.TextDisabled("Enough company = 3 patrons after filters. Quiet = not that, plus the door/yard.");
+        Line("Patron", "Another person on the plot. 1 each, cap 3.");
+        Line("In character", "Role-Playing status. +1.");
+        Line("Seeking company", "Looking for Party / recruiting. +1.");
+        Line("At the bench", "Melding Materia. +1.");
+        Line("Someone reached out", "/tell — not scored in this testing build.");
+        Line("An exchange", "Trade — not scored in this testing build.");
+        Line("Voices nearby", "Say — off. Not scored.");
+        ImGui.TextDisabled("Enough company = score 3. Quiet = under that, plus the door/yard.");
 
         ImGui.Separator();
         UiTheme.Section("Server");

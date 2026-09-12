@@ -1,76 +1,29 @@
 # LightsOn occupancy API
 
-v1 contract. The plugin is the reporter. The website is a reader. Same payloads.
+v1. HTTPS hostname required. No IPs.
 
-Base URL is HTTPS with a real certificate and a DNS hostname (Dalamud requirement). No IPs.
-
-## States
-
-| `state` | Meaning |
-| --- | --- |
-| `happening` | At least one valid report that the on-plot scan hit 3+ (after the reporter’s friend/FC filters) |
-| `wrapped_up` | At least one valid report that the door could not be entered and the yard was empty |
-| `unknown` | No fresh reports |
-
-Never a headcount. Never a ranking. Show report counts and age only.
-
-Happening outranks wrapped-up when both are still fresh. A plugin that just scanned 3+ must refuse `wrapped_up`.
-
-Decay: drop a report after 20 minutes. A venue returns to `unknown` when nothing is left.
+Public window: **20 minutes**. Raw reports stay in D1 for hosts; GET never reads them.
 
 ## `GET /v1/occupancy`
 
-Optional query: `dc`, `world`.
-
-```json
-[
-  {
-    "venueId": "00Htdj43hypR",
-    "state": "happening",
-    "happeningReports": 3,
-    "wrappedUpReports": 0,
-    "updatedAt": "2026-09-12T06:00:00Z",
-    "expiresAt": "2026-09-12T06:20:00Z"
-  }
-]
-```
-
-Public. No auth. Cached is fine.
+Optional `dc`, `world`. Cached ~60s. Snapshot only: `venueId`, `state` (`happening` | `wrapped_up`), report counts, `updatedAt`, `expiresAt`.
 
 ## `POST /v1/reports`
 
-```json
-{
-  "venueId": "00Htdj43hypR",
-  "kind": "happening",
-  "reporterId": "a1b2c3d4e5f6…",
-  "at": "2026-09-12T06:00:00Z",
-  "proof": {
-    "world": "Cuchulainn",
-    "district": "Mist",
-    "ward": 14,
-    "plot": 33,
-    "subdivision": true,
-    "inside": true,
-    "thresholdMet": true
-  }
-}
-```
+`venueId`, `kind` (`happening` | `wrapped_up`), `reporterId`, `proof` (world/plot/inside/`thresholdMet`). No counts, no names. One report per reporter per venue per 15 minutes. Happening requires `thresholdMet`. Wrapped-up is rejected when `thresholdMet`.
 
-`kind` is `happening` or `wrapped_up`.
+## `GET /v1/notes?venueId=` / `POST /v1/notes`
 
-`reporterId` is a random GUID created on the client. Not derived from a character or account. Resettable in Settings.
+Short log-book lines. POST only while that venue is `happening`. 80 characters, no links, one per reporter per venue per day, 14-day life, 12 notes kept.
 
-`proof.thresholdMet` is the only occupancy boolean. **Do not accept a raw count.** Reject `wrapped_up` when `thresholdMet` is true. Reject when `world` / plot does not match the listed venue.
+## `GET /v1/outdoors` / `POST /v1/outdoors`
 
-Rate limit: one report per `reporterId` per venue per 15 minutes.
+Pocket scenes. POST `pocket`, `world`, `place`, `tier`, `inCharacter`, optional `privateGathering`. GET hides pockets that pass the private-vote rule.
 
-Plugin reports with matching `proof` are trusted. Website confirmations (no proof) may increment a weaker counter later; they must not lead the public state in v1.
+## Cost limits
 
-## `GET /v1/venues` (optional)
-
-If the occupancy host also mirrors listings. Otherwise the plugin reads `https://api.ffxivvenues.com/venue` for names and plots and only uses this API for occupancy.
-
-## Buffering
-
-Do not serve GET from raw POSTs. Ingest into `reports`, coalesce by `venueId` into the `occupancy` snapshot `{ state, happeningReports, wrappedUpReports, updatedAt, expiresAt }`. Public GET reads the snapshot only. Raw reports are kept for owners/schedulers, not shown on the public list. Window is 20 minutes.
+- Occupancy/outdoors GET cached 60s
+- Cron every 5 minutes (not every minute)
+- Directory refresh at most every 30 minutes
+- POST body cap 8 KB, ~80 POSTs/minute/isolate
+- History pruned at 14 days

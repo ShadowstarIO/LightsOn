@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
-    <Version>0.0.1.0</Version>
+    <Version>0.0.2.0</Version>
     <Author>XozaShadow</Author>
     <Name>LightsOn</Name>
-    <Punchline>See if a venue has company — lanterns lit, or wrapped up early.</Punchline>
-    <Description>Occupancy for listed FFXIV venues. Scan on the plot; reports are lanterns lit or wrapped up early, never names or counts.</Description>
+    <Punchline>Tired of posted hours and an empty room? See where the lanterns are lit.</Punchline>
+    <Description>Occupancy for listed venues and short outdoor scenes. Reports are lanterns lit or wrapped up early, never names or counts. Optional log-book notes while the lanterns are lit.</Description>
     <RepoUrl>https://github.com/XozaShadow/LightsOn</RepoUrl>
     <PackageProjectUrl>https://github.com/XozaShadow/LightsOn</PackageProjectUrl>
     <IconUrl>https://raw.githubusercontent.com/XozaShadow/LightsOn/main/images/icon.png</IconUrl>
