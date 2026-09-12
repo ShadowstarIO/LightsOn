@@ -46,7 +46,7 @@ internal static class NearbyScan
         if (!here.OnPlot)
             return new ScanResult(false, false, false, 0, 0, false, here.Summary);
 
-        var tally = Tally(plugin, player.EntityId, player.CompanyTag.TextValue.Trim());
+        var tally = CountNearby(plugin, player.EntityId, player.CompanyTag.TextValue.Trim());
         var met = tally.Score >= ScanResult.Threshold;
         var who = plugin.Configuration.ExcludeFriends || plugin.Configuration.ExcludeFreeCompany ? "after filters" : "nearby";
         var bits = new List<string>();
@@ -77,7 +77,7 @@ internal static class NearbyScan
         var gx = (int)MathF.Floor(pos.X / 20f);
         var gz = (int)MathF.Floor(pos.Z / 20f);
         var pocket = $"{world}|{Plugin.ClientState.TerritoryType}|{gx}|{gz}";
-        var tally = Tally(plugin, player.EntityId, player.CompanyTag.TextValue.Trim());
+        var tally = CountNearby(plugin, player.EntityId, player.CompanyTag.TextValue.Trim());
         var tier = TierName(tally.Patrons, tally.Score);
         var summary = $"{place} · {tier} · {tally.Patrons} patrons scored";
         return new OutdoorScan(pocket, world, place, tally.Patrons, tally.Score, tally.InCharacter, tally.Visible, tally.Familiar, tier, summary);
@@ -104,7 +104,7 @@ internal static class NearbyScan
 
     private readonly record struct Tally(int Visible, int Familiar, int Patrons, int Score, bool InCharacter, bool Seeking, bool Bench);
 
-    private static Tally Tally(Plugin plugin, uint selfId, string myTag)
+    private static Tally CountNearby(Plugin plugin, uint selfId, string myTag)
     {
         var cfg = plugin.Configuration;
         var friends = cfg.ExcludeFriends ? FriendBook.Names() : null;
