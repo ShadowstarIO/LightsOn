@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Dalamud.NET.Sdk/15.0.0">
+  <PropertyGroup>
+    <Version>0.0.1.0</Version>
+    <Author>XozaShadow</Author>
+    <Name>LightsOn</Name>
+    <Punchline>See if a venue has people there — happening or wrapped up early.</Punchline>
+    <Description>Occupancy reports for listed FFXIV venues. Scan on the plot; the plugin only sends happening or wrapped up early, never names or counts.</Description>
+    <RepoUrl>https://github.com/XozaShadow/LightsOn</RepoUrl>
+    <PackageProjectUrl>https://github.com/XozaShadow/LightsOn</PackageProjectUrl>
+    <IconUrl>https://raw.githubusercontent.com/XozaShadow/LightsOn/main/images/icon.png</IconUrl>
+    <Tags>venue;roleplay;housing;occupancy</Tags>
+    <InternalName>LightsOn</InternalName>
+    <ApplicableVersion>any</ApplicableVersion>
+    <DalamudApiLevel>15</DalamudApiLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Include="..\images\icon.svg" Link="images\icon.svg" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
