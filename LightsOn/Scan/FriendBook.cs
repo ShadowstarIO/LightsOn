@@ -16,8 +16,10 @@ internal static class FriendBook
                 var proxy = InfoProxyFriendList.Instance();
                 if (proxy == null)
                     return names;
-                foreach (ref var entry in proxy->CharDataSpan)
+                var span = proxy->CharDataSpan;
+                for (var i = 0; i < span.Length; i++)
                 {
+                    var entry = span[i];
                     if (entry.ContentId == 0)
                         continue;
                     var name = entry.Name.ToString().Trim();
