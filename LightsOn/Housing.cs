@@ -23,7 +23,7 @@ internal static class HousingReader
 {
     public static HousingAddress Read()
     {
-        var district = DistrictFromTerritory(Plugin.ClientState.TerritoryType);
+        var district = DistrictFromTerritory((ushort)Plugin.ClientState.TerritoryType);
         var ward = 0;
         var plot = 0;
         var room = 0;
