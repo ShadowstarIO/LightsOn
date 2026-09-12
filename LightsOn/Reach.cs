@@ -6,9 +6,9 @@ namespace LightsOn;
 
 internal static class Reach
 {
-    private static Dictionary<string, byte>? worldRegion;
-    private static Dictionary<string, byte>? dcRegion;
-    private static byte myRegion;
+    private static Dictionary<string, uint>? worldRegion;
+    private static Dictionary<string, uint>? dcRegion;
+    private static uint myRegion;
     private static string myWorld = "";
 
     public static bool CanVisitWorld(string? world)
@@ -52,7 +52,7 @@ internal static class Reach
                 var dc = row.DataCenter.ValueNullable;
                 if (dc is null)
                     continue;
-                var region = dc.Value.Region;
+                var region = dc.Value.Region.RowId;
                 if (region == 0)
                     continue;
                 worlds[name] = region;
