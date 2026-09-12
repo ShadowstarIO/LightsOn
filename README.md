@@ -1,72 +1,75 @@
 # LightsOn
 
-See if an FFXIV venue has **company** — **lanterns lit**, or **wrapped up early**.
+Tired of looking for a place that’s open, walking the ward, and finding the lights out? LightsOn is there so you spend less time on empty plots and more time where something is actually happening — and so you can tell others, quietly, what you found.
 
-Posted hours lie. LightsOn is the occupancy layer on top of the public [FFXIV Venues](https://ffxivvenues.com/) list. A place with enough company is lanterns lit. A locked door and an empty yard is wrapped up early.
+**Lanterns lit** means enough company on a listed plot. **Wrapped up early** means the hours said open, but the door and yard look quiet. It does not rank venues by size. A small lounge with three patrons counts.
 
 `/lightson` or `/lo`
 
-## What it sends
+## Testing
 
-Reports are **opt-in**. A report is only allowed after a scan **on that plot**.
+Every drop is a **pre-release / testing** build until there is an explicit live release.
 
-The plugin never uploads:
-
-- character names
-- Content IDs or account IDs
-- friend or FC lists
-- a player count
-
-The server only sees: venue id, lanterns lit or wrapped up early, a resettable random reporter id, and that enough company passed (a boolean). Friends and FC members are subtracted on your client before that boolean is decided.
-
-A scan with enough company cannot file wrapped-up. Several reports raise confidence. Reports age out in about 20 minutes.
-
-See [docs/PRIVACY.md](docs/PRIVACY.md), [docs/API.md](docs/API.md), and [docs/ACTIVITY.md](docs/ACTIVITY.md) (OOC/IC wording).
-
-See [docs/PRIVACY.md](docs/PRIVACY.md) and [docs/API.md](docs/API.md).
-
-## Test in Dalamud
-
-Custom plugin repo:
+Custom repository:
 
 ```
 https://raw.githubusercontent.com/XozaShadow/LightsOn/main/repo.json
 ```
 
-Dalamud → Settings → Experimental → Custom Plugin Repositories → add that URL → Save → Plugin Installer → LightsOn.
+Plugin installer → settings → experimental → custom repositories → add that URL. Enable **Get plugin testing versions**, then install LightsOn.
 
-Occupancy API is already defaulted to `https://lightson.wbro12-cloudflare.workers.dev`.
+Occupancy host: `https://lightson.wbro12-cloudflare.workers.dev`
 
-## Status
+## What it sends
 
-Early source. Not in the Dalamud plugin installer yet. Occupancy API is a Cloudflare Worker in [`worker/`](worker/), deployed by GitHub Actions. After the first deploy, the URL is `https://lightson.wbro12-cloudflare.workers.dev` — paste that origin into plugin Settings.
+Reports are **opt-in**. Nothing goes out until you turn **Send reports** on.
 
-The venue list loads from the public FFXIV Venues API. Occupancy stays empty until that URL is set.
+Never uploaded:
 
-## Build
+- character names
+- Content IDs or account IDs
+- friend or Free Company lists
+- a headcount
 
-Windows, .NET 10, Dalamud API 15.
+The server sees a venue or outdoor pocket id, lanterns lit / wrapped up early / a scene tier, a resettable random reporter id, and booleans (enough company, in character, private gathering). Friends and Free Company are subtracted on your machine first.
 
-```
-dotnet build LightsOn.slnx -c Release
-```
+A scan with enough company cannot file wrapped up early. Several reports raise confidence. Public occupancy lasts about **20 minutes**. History is kept for hosts, not shown as a graveyard of old closures.
 
-D17 needs `images/icon.png` at 512×512. SVG source is `images/icon.svg`.
+## Log book
+
+While lanterns are lit, someone who has been on that plot about **20 minutes** can leave a short note (up to 80 characters): *great music*, *kind host*. Not a rating. No links. Notes fade after **two weeks**. One note per person per venue per day.
+
+## Outdoors
+
+A second tab for moving or street scenes. Short range (a pocket, not a whole city). After about **10 minutes** in the same pocket it can note **extremely busy**, **some activity**, or **some wandering**, plus an **in character** chip. If most of the company looks like friends or Free Company, it asks whether the gathering is private. Enough “yes, private” votes hide it; enough “no, public” votes list it.
+
+## Settings
+
+- Send reports (master opt-in; wrapped-up is locked for 20 minutes after you turn this on)
+- Auto lanterns-lit when you are inside with enough company
+- Prompt when you walk onto a listed plot
+- Leave friends / Free Company out of company
+- Count in-character / seeking company / at the bench as extra score
+- Log book
+- Note outdoor scenes
+- Reset reporter id
 
 ## Commands
 
 | Command | Action |
 | --- | --- |
 | `/lightson` `/lo` | Open the window |
-| `/lo here` | Print current world and housing plot |
+| `/lo here` | Current world and housing plot |
 | `/lo config` | Settings |
+| `/lo refresh` | Reload listings |
 
-## Settings
+## Docs
 
-- Exclude friends from the 3+ check
-- Exclude Free Company members (same company tag, client-side)
-- Opt in to sending reports
-- Reset reporter id
-- Occupancy API URL (HTTPS hostname, not an IP)
+- [Privacy](docs/PRIVACY.md)
+- [Activity wording](docs/ACTIVITY.md)
+- [API](docs/API.md)
+- [Outdoors](docs/OPENWORLD.md)
+
+Listings are loaded from the public community venue directory. Occupancy is LightsOn.
 
 Source: https://github.com/XozaShadow/LightsOn

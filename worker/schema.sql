@@ -39,3 +39,40 @@ CREATE TABLE IF NOT EXISTS venues (
 );
 
 CREATE INDEX IF NOT EXISTS venues_world ON venues (world);
+
+CREATE TABLE IF NOT EXISTS notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  venue_id TEXT NOT NULL,
+  reporter_id TEXT NOT NULL,
+  text TEXT NOT NULL,
+  at TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS notes_venue_at ON notes (venue_id, at);
+
+CREATE TABLE IF NOT EXISTS outdoors (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  pocket TEXT NOT NULL,
+  world TEXT NOT NULL,
+  place TEXT NOT NULL,
+  tier TEXT NOT NULL,
+  in_character INTEGER NOT NULL DEFAULT 0,
+  reporter_id TEXT NOT NULL,
+  at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS outdoors_pocket_at ON outdoors (pocket, at);
+
+CREATE TABLE IF NOT EXISTS outdoor_votes (
+  pocket TEXT NOT NULL,
+  reporter_id TEXT NOT NULL,
+  private INTEGER NOT NULL,
+  at TEXT NOT NULL,
+  PRIMARY KEY (pocket, reporter_id)
+);
+
+CREATE TABLE IF NOT EXISTS meta (
+  k TEXT PRIMARY KEY,
+  v TEXT NOT NULL
+);

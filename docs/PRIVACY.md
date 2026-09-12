@@ -1,38 +1,37 @@
 # Privacy
 
-LightsOn exists to answer “is anyone at this listed venue?” without building a player census.
+LightsOn answers “is anyone at this listed venue?” and “is there a scene in this outdoor pocket?” without building a census.
 
 ## On the client only
 
-- Names of nearby players
+- Names of nearby people
 - Friend list
 - Free Company tag comparison
-- The numeric player count used for the 3+ check
+- The numeric score used for “enough company”
+- Online-status labels used as extra score (in character, seeking company, at the bench)
 
-Friends and FC members can be subtracted before the 3+ boolean is decided. Those lists never leave the machine.
+Those never leave the machine.
 
-## Opt-in reports (HTTPS)
+## Opt-in (HTTPS)
 
-Only if you turn **Send reports** on, and only when you click a report button after a successful on-plot scan:
+Only with **Send reports** on:
 
-- FFXIV Venues id
-- `happening` or `wrapped_up`
-- Resettable random reporter id (not a name, not a Content ID)
-- World, district, ward, plot, subdivision, inside/outside
-- `thresholdMet` (boolean)
+**Venue occupancy** — listed venue id; lanterns lit or wrapped up early; random reporter id; world / district / ward / plot / subdivision / inside; `thresholdMet` (boolean). On-plot only.
+
+**Log book** — same proof, plus a short text field (2–80 characters, no links). Only while lanterns are lit, after ~20 minutes on the plot.
+
+**Outdoor scenes** — world, place name, pocket id, tier, in-character boolean, optional private-gathering vote. No names.
+
+Listings are fetched from the public community venue directory (`https://api.ffxivvenues.com/venue`). Occupancy is LightsOn’s host. Polling is slow on purpose so that host stays cheap.
 
 ## Never collected
 
-- Other players’ names, Content IDs, or account IDs
+- Other people’s names, Content IDs, or account IDs
 - Your character name or Content ID
-- Exact coordinates
+- Exact coordinates (outdoor pockets are a coarse cell)
 - Unlisted houses
-- Passive 5-minute zone scans
-
-## Directory
-
-The venue list is the public [FFXIV Venues API](https://api.ffxivvenues.com/docs/v1.0). LightsOn does not add occupancy to houses that are not on that list.
+- Chat logs (tells / say / party are not uploaded in this testing build)
 
 ## Reporter id
 
-Generated locally. Settings → Reset reporter id. After a reset, old reports cannot be tied to the new id from the plugin’s side.
+Generated locally. Settings → Reset reporter id.
