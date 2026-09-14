@@ -5,7 +5,7 @@ const NOTE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 const NOTE_RATE_MS = 24 * 60 * 60 * 1000;
 const MAX_BODY = 8 * 1024;
 const VENUES_URL = "https://api.ffxivvenues.com/venue";
-const UA = "LightsOn/0.0.3.4 (+https://github.com/XozaShadow/LightsOn)";
+const UA = "LightsOn/0.0.3.7 (+https://github.com/XozaShadow/LightsOn)";
 const TIER_RANK = { extremely_busy: 3, some_activity: 2, some_wandering: 1 };
 const venueCache = new Map();
 let migrateTried = false;
@@ -28,8 +28,6 @@ export default {
         return json({ name: "LightsOn", windowMinutes: 20, occupancy: "/v1/occupancy" });
       if (request.method === "GET" && url.pathname === "/v1/health")
         return json(await health(env));
-      if (request.method === "POST")
-        await migrate(env);
       if (request.method === "GET" && url.pathname === "/v1/occupancy")
         return cachedGet(request, ctx, 60, () => getOccupancy(env, url.searchParams));
       if (request.method === "GET" && url.pathname === "/v1/outdoors")
@@ -38,6 +36,12 @@ export default {
         return json(await getNotes(env, url.searchParams.get("venueId") || ""));
       if (request.method === "GET" && url.pathname === "/v1/reports")
         return cachedGet(request, ctx, 60, () => getReportLog(env, url.searchParams.get("venueId") || ""));
+      if (request.method === "POST")
+      {
+        if (!ingestOk(request, env))
+          return json({ error: "unauthorized" }, 401);
+        await migrate(env);
+      }
       if (request.method === "POST" && url.pathname === "/v1/reports")
         return await limited(request, () => postReport(env, request));
       if (request.method === "POST" && url.pathname === "/v1/notes")
@@ -102,6 +106,19 @@ function json(body, status = 200) {
     status,
     headers: { "content-type": "application/json; charset=utf-8", ...CORS },
   });
+}
+
+function ingestOk(request, env) {
+  const expected = String(env.INGEST_KEY || "");
+  if (expected.length < 16)
+    return false;
+  const got = String(request.headers.get("X-LightsOn-Key") || "");
+  if (got.length !== expected.length)
+    return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++)
+    diff |= expected.charCodeAt(i) ^ got.charCodeAt(i);
+  return diff === 0;
 }
 
 async function health(env) {

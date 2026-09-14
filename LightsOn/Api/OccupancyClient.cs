@@ -51,7 +51,7 @@ internal sealed class OccupancyClient
     public async Task PostReport(string baseUrl, OccupancyReport report, CancellationToken token)
     {
         var url = baseUrl.Trim().TrimEnd('/') + "/v1/reports";
-        using var res = await http.PostAsJsonAsync(url, report, Json, token).ConfigureAwait(false);
+        using var res = await PostJson(url, report, token).ConfigureAwait(false);
         await EnsureOk(res).ConfigureAwait(false);
     }
 
@@ -64,7 +64,7 @@ internal sealed class OccupancyClient
     public async Task PostNote(string baseUrl, NotePost note, CancellationToken token)
     {
         var url = baseUrl.Trim().TrimEnd('/') + "/v1/notes";
-        using var res = await http.PostAsJsonAsync(url, note, Json, token).ConfigureAwait(false);
+        using var res = await PostJson(url, note, token).ConfigureAwait(false);
         await EnsureOk(res).ConfigureAwait(false);
     }
 
@@ -77,8 +77,19 @@ internal sealed class OccupancyClient
     public async Task PostOutdoor(string baseUrl, OutdoorReport report, CancellationToken token)
     {
         var url = baseUrl.Trim().TrimEnd('/') + "/v1/outdoors";
-        using var res = await http.PostAsJsonAsync(url, report, Json, token).ConfigureAwait(false);
+        using var res = await PostJson(url, report, token).ConfigureAwait(false);
         await EnsureOk(res).ConfigureAwait(false);
+    }
+
+    private async Task<HttpResponseMessage> PostJson<T>(string url, T body, CancellationToken token)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, url)
+        {
+            Content = JsonContent.Create(body, options: Json),
+        };
+        if (global::LightsOn.IngestKey.Value.Length > 0)
+            req.Headers.TryAddWithoutValidation("X-LightsOn-Key", global::LightsOn.IngestKey.Value);
+        return await http.SendAsync(req, token).ConfigureAwait(false);
     }
 
     private static async Task EnsureOk(HttpResponseMessage res)

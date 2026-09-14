@@ -31,3 +31,7 @@ jobs:
           accountId: db80b407c9444b69c5bc38bbe07efb38
           workingDirectory: worker
           command: deploy
+          secrets: |
+            INGEST_KEY
+        env:
+          INGEST_KEY: ${{ secrets.LIGHTSON_INGEST_KEY }}

@@ -43,6 +43,26 @@ jobs:
           echo "tag=$tag" >> $env:GITHUB_OUTPUT
           Write-Host "Version $v  Tag $tag  LastUpdate $unix"
 
+      - name: Embed ingest key
+        shell: pwsh
+        env:
+          LIGHTSON_INGEST_KEY: ${{ secrets.LIGHTSON_INGEST_KEY }}
+        run: |
+          $k = $env:LIGHTSON_INGEST_KEY
+          if (-not $k) {
+            Write-Host "LIGHTSON_INGEST_KEY secret missing — plugin will not be able to POST."
+            $k = ""
+          }
+          $escaped = $k.Replace('\','\\').Replace('"','\"')
+          @"
+          namespace LightsOn;
+          internal static class IngestKey
+          {
+              public const string Value = "$escaped";
+          }
+          "@ | Set-Content -Path LightsOn/IngestKey.cs -Encoding utf8
+          Write-Host "Ingest key length $($k.Length)"
+
       - name: Download Dalamud
         shell: pwsh
         run: |
