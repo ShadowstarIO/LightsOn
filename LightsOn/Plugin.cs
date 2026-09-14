@@ -57,7 +57,7 @@ public sealed class Plugin : IDalamudPlugin
         Configuration.Save();
 
         http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.3.6 (+https://github.com/XozaShadow/LightsOn)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.3.7 (+https://github.com/XozaShadow/LightsOn)");
         directory = new DirectoryClient(http);
         occupancy = new OccupancyClient(http);
 
@@ -412,6 +412,8 @@ public sealed class Plugin : IDalamudPlugin
             return "Only posted hours are reported. Nothing sent.";
         if (msg.Contains("unknown venue", StringComparison.OrdinalIgnoreCase))
             return "Listing is not on the occupancy server yet. Hit Refresh.";
+        if (msg.Contains("unauthorized", StringComparison.OrdinalIgnoreCase))
+            return "This build cannot write occupancy. Need a CI ingest key.";
         if (msg.Contains("busy", StringComparison.OrdinalIgnoreCase))
             return "Server is busy. Try again in a minute.";
         return string.IsNullOrWhiteSpace(msg) || msg.Length > 160

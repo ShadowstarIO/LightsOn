@@ -12,17 +12,9 @@ Optional `dc`, `world`. Cached ~60s. Snapshot only: `venueId`, `state` (`happeni
 
 Last 20 minutes for one listing: time, kind, yard vs inside. No reporter ids.
 
-## `POST /v1/reports`
+## Writes
 
-`venueId`, `kind` (`happening` | `wrapped_up`), `reporterId`, `proof` (world/plot/inside/`thresholdMet`). No counts, no names. One report per reporter per venue per 20 minutes. Happening requires `thresholdMet`. Wrapped-up is rejected when `thresholdMet`.
-
-## `GET /v1/notes?venueId=` / `POST /v1/notes`
-
-Short log-book lines. POST only while that venue is `happening`. 80 characters, no links, one per reporter per venue per day, 14-day life, 12 notes kept.
-
-## `GET /v1/outdoors` / `POST /v1/outdoors`
-
-Pocket scenes. POST `pocket`, `world`, `place`, `tier`, `inCharacter`, optional `privateGathering`. GET hides pockets that pass the private-vote rule.
+`POST` routes are not a public API. They require an ingest key compiled into the shipping plugin (not stored in git). Reading occupancy (`GET`) stays public.
 
 ## Cost limits
 
