@@ -80,3 +80,5 @@ A second tab for moving or street scenes. Short range (a pocket, not a whole cit
 Listings are loaded from the public community venue directory. Occupancy is LightsOn.
 
 Source: https://github.com/XozaShadow/LightsOn
+
+<a href="https://www.flaticon.com/free-icons/birthday-and-party" title="icons">Icons created by Magnific - Flaticon</a>
