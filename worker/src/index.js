@@ -1,5 +1,5 @@
 const WINDOW_MS = 20 * 60 * 1000;
-const RATE_MS = 20 * 60 * 1000;
+const RATE_MS = 45 * 1000;
 const HISTORY_MS = 14 * 24 * 60 * 60 * 1000;
 const NOTE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 const NOTE_RATE_MS = 24 * 60 * 60 * 1000;
@@ -13,7 +13,7 @@ let migrateTried = false;
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
+  "Access-Control-Allow-Headers": "Content-Type, X-LightsOn-Key",
   "Access-Control-Max-Age": "86400",
 };
 
@@ -58,7 +58,6 @@ export default {
   async scheduled(_event, env) {
     await migrate(env);
     await pruneClosed(env);
-    await recomputeAll(env);
     const cutoff = new Date(Date.now() - HISTORY_MS).toISOString();
     await env.DB.prepare("DELETE FROM reports WHERE at < ?").bind(cutoff).run();
     await env.DB.prepare("DELETE FROM notes WHERE expires_at < ?").bind(new Date().toISOString()).run();
@@ -73,8 +72,8 @@ async function limited(request, fn) {
   const now = Date.now();
   while (postHits.length && now - postHits[0] > 60_000)
     postHits.shift();
-  if (postHits.length > 80)
-    return json({ error: "busy, try later" }, 429);
+  if (postHits.length > 30)
+    return json({ error: "Too many updates right now. Try again in a minute." }, 429);
   const len = Number(request.headers.get("content-length") || 0);
   if (len > MAX_BODY)
     return json({ error: "payload too large" }, 413);
@@ -122,54 +121,66 @@ function ingestOk(request, env) {
 }
 
 async function health(env) {
-  const venues = await env.DB.prepare("SELECT COUNT(*) AS n FROM venues").first();
-  const occ = await env.DB.prepare("SELECT COUNT(*) AS n FROM occupancy WHERE expires_at > ?")
-    .bind(new Date().toISOString())
-    .first();
-  return { ok: true, venues: venues?.n ?? 0, occupancy: occ?.n ?? 0 };
+  const since = new Date(Date.now() - WINDOW_MS).toISOString();
+  const reports = await env.DB.prepare("SELECT COUNT(*) AS n FROM reports WHERE at >= ?").bind(since).first();
+  return { ok: true, reports: reports?.n ?? 0, windowMinutes: 20 };
 }
 
 async function getOccupancy(env, params) {
-  const now = new Date().toISOString();
   void params;
-  try {
-    const { results } = await env.DB.prepare(
-      `SELECT o.venue_id AS venueId, o.state, o.happening_reports AS happeningReports,
-              o.wrapped_up_reports AS wrappedUpReports,
-              o.interior_happening AS interiorHappening, o.interior_wrapped AS interiorWrapped,
-              o.exterior_happening AS exteriorHappening, o.exterior_wrapped AS exteriorWrapped,
-              o.door_locked AS doorLocked, o.both_layers AS bothLayers,
-              o.updated_at AS updatedAt, o.expires_at AS expiresAt
-       FROM occupancy o
-       WHERE o.expires_at > ?
-       ORDER BY o.updated_at DESC LIMIT 200`,
-    ).bind(now).all();
-    return mapOccupancy(results);
-  } catch {
-    const { results } = await env.DB.prepare(
-      `SELECT venue_id AS venueId, state, happening_reports AS happeningReports,
-              wrapped_up_reports AS wrappedUpReports, updated_at AS updatedAt, expires_at AS expiresAt
-       FROM occupancy WHERE expires_at > ? ORDER BY updated_at DESC LIMIT 200`,
-    ).bind(now).all();
-    return mapOccupancy(results);
-  }
+  const since = new Date(Date.now() - WINDOW_MS).toISOString();
+  const { results } = await env.DB.prepare(
+    `SELECT venue_id AS venueId,
+            COUNT(DISTINCT CASE WHEN kind = 'happening' THEN reporter_id END) AS happeningReports,
+            COUNT(DISTINCT CASE WHEN kind = 'wrapped_up' THEN reporter_id END) AS wrappedUpReports,
+            COUNT(DISTINCT CASE WHEN kind = 'happening' AND inside = 1 THEN reporter_id END) AS interiorHappening,
+            COUNT(DISTINCT CASE WHEN kind = 'wrapped_up' AND inside = 1 THEN reporter_id END) AS interiorWrapped,
+            COUNT(DISTINCT CASE WHEN kind = 'happening' AND inside = 0 THEN reporter_id END) AS exteriorHappening,
+            COUNT(DISTINCT CASE WHEN kind = 'wrapped_up' AND inside = 0 THEN reporter_id END) AS exteriorWrapped,
+            MAX(door_locked) AS doorLocked,
+            MAX(at) AS updatedAt
+     FROM reports
+     WHERE at >= ?
+     GROUP BY venue_id
+     ORDER BY MAX(at) DESC
+     LIMIT 200`,
+  ).bind(since).all();
+  return (results ?? []).map((row) => occupancyFromAgg(row));
 }
 
-function mapOccupancy(results) {
-  return (results ?? []).map((row) => ({
+function occupancyFromAgg(row) {
+  const happening = Number(row.happeningReports || 0);
+  const wrapped = Number(row.wrappedUpReports || 0);
+  const intH = Number(row.interiorHappening || 0);
+  const intW = Number(row.interiorWrapped || 0);
+  const extH = Number(row.exteriorHappening || 0);
+  const extW = Number(row.exteriorWrapped || 0);
+  const interior = intH + intW > 0;
+  const exterior = extH + extW > 0;
+  let state = "unknown";
+  if (intH > 0 && extW > 0)
+    state = "mixed";
+  else if (extH > 0 && intW > 0)
+    state = "mixed";
+  else if (happening > 0)
+    state = "happening";
+  else if (wrapped > 0)
+    state = "wrapped_up";
+  const updated = row.updatedAt || new Date().toISOString();
+  return {
     venueId: row.venueId,
-    state: row.state,
-    happeningReports: Number(row.happeningReports || 0),
-    wrappedUpReports: Number(row.wrappedUpReports || 0),
-    interiorHappening: Number(row.interiorHappening || 0),
-    interiorWrapped: Number(row.interiorWrapped || 0),
-    exteriorHappening: Number(row.exteriorHappening || 0),
-    exteriorWrapped: Number(row.exteriorWrapped || 0),
+    state,
+    happeningReports: happening,
+    wrappedUpReports: wrapped,
+    interiorHappening: intH,
+    interiorWrapped: intW,
+    exteriorHappening: extH,
+    exteriorWrapped: extW,
     doorLocked: Number(row.doorLocked) === 1,
-    bothLayers: Number(row.bothLayers) === 1,
-    updatedAt: row.updatedAt,
-    expiresAt: row.expiresAt,
-  }));
+    bothLayers: interior && exterior,
+    updatedAt: updated,
+    expiresAt: new Date(new Date(updated).getTime() + WINDOW_MS).toISOString(),
+  };
 }
 
 async function postReport(env, request) {
@@ -193,11 +204,19 @@ async function postReport(env, request) {
   const since = new Date(now.getTime() - RATE_MS).toISOString();
   const proof = body.proof;
   const inside = proof.inside ? 1 : 0;
-  const recent = await env.DB.prepare(
-    "SELECT id FROM reports WHERE reporter_id = ? AND venue_id = ? AND inside = ? AND at >= ? LIMIT 1",
-  ).bind(body.reporterId, body.venueId, inside, since).first();
+  const door = proof.doorLocked ? 1 : 0;
+  let recent = null;
+  try {
+    recent = await env.DB.prepare(
+      "SELECT id FROM reports WHERE reporter_id = ? AND venue_id = ? AND kind = ? AND inside = ? AND door_locked = ? AND at >= ? LIMIT 1",
+    ).bind(body.reporterId, body.venueId, body.kind, inside, door, since).first();
+  } catch {
+    recent = await env.DB.prepare(
+      "SELECT id FROM reports WHERE reporter_id = ? AND venue_id = ? AND kind = ? AND inside = ? AND at >= ? LIMIT 1",
+    ).bind(body.reporterId, body.venueId, body.kind, inside, since).first();
+  }
   if (recent)
-    return json({ error: "already reported this layer recently" }, 429);
+    return json({ error: "already reported this recently" }, 429);
 
   try {
     await env.DB.prepare(
@@ -242,13 +261,7 @@ async function postReport(env, request) {
     ).run();
   }
 
-  await coalesceVenue(env, body.venueId);
-  const occupancy = await env.DB.prepare(
-    `SELECT venue_id AS venueId, state, happening_reports AS happeningReports,
-            wrapped_up_reports AS wrappedUpReports, updated_at AS updatedAt, expires_at AS expiresAt
-     FROM occupancy WHERE venue_id = ?`,
-  ).bind(body.venueId).first();
-  return json({ ok: true, occupancy: occupancy ?? { venueId: body.venueId, state: "unknown" } });
+  return json({ ok: true, venueId: body.venueId });
 }
 
 async function getReportLog(env, venueId) {
@@ -313,9 +326,11 @@ async function postNote(env, request) {
   if (!body.proof || !plotLooksValid(body.proof))
     return json({ error: "proof required" }, 400);
 
-  const occ = await env.DB.prepare("SELECT state FROM occupancy WHERE venue_id = ? AND expires_at > ?")
-    .bind(body.venueId, new Date().toISOString()).first();
-  if (!occ || occ.state !== "happening")
+  const since = new Date(Date.now() - WINDOW_MS).toISOString();
+  const lit = await env.DB.prepare(
+    "SELECT id FROM reports WHERE venue_id = ? AND kind = 'happening' AND at >= ? LIMIT 1",
+  ).bind(body.venueId, since).first();
+  if (!lit)
     return json({ error: "log book only while lanterns are lit" }, 400);
 
   const venue = await lookupVenue(body.venueId);

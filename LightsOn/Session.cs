@@ -13,26 +13,63 @@ public sealed class Session
     public DateTimeOffset PocketSince { get; set; }
     public VenueListing? Hop { get; set; }
     public bool HopDismissed { get; set; }
-    public bool WrappedConfirm { get; set; }
+    public string? WrapSureVenue { get; set; }
     public DateTimeOffset LastAutoHappening { get; set; }
     public string LastAutoVenue { get; set; } = "";
     public bool LastAutoInside { get; set; }
     public DateTimeOffset LastOutdoorPost { get; set; }
+    public DateTimeOffset ObserveSince { get; set; }
+    public DateTimeOffset LastScanAt { get; set; }
     public OutdoorPending? OutdoorPrivate { get; set; }
     public PlotCheck Check { get; } = new();
     public HashSet<string> HeardNames { get; } = new(StringComparer.OrdinalIgnoreCase);
     public bool SelfSpoke { get; set; }
     public bool HeardMusic { get; set; }
+    public string HereLine { get; set; } = "not on a plot";
+    public Dictionary<string, string> ActionByVenue { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, DateTimeOffset> Sent { get; } = new(StringComparer.Ordinal);
 
     public TimeSpan OnPlot => PlotKey.Length == 0 ? TimeSpan.Zero : DateTimeOffset.UtcNow - PlotSince;
     public TimeSpan InPocket => PocketKey.Length == 0 ? TimeSpan.Zero : DateTimeOffset.UtcNow - PocketSince;
+
+    public string ActionFor(string? venueId)
+    {
+        if (string.IsNullOrEmpty(venueId))
+            return "";
+        return ActionByVenue.TryGetValue(venueId, out var line) ? line : "";
+    }
+
+    public void SetAction(string venueId, string line) => ActionByVenue[venueId] = line;
+
+    public TimeSpan SendWait(string venueId, string action)
+    {
+        if (!Sent.TryGetValue($"{venueId}:{action}", out var at))
+            return TimeSpan.Zero;
+        var left = TimeSpan.FromSeconds(Limits.SendRateSeconds) - (DateTimeOffset.UtcNow - at);
+        return left > TimeSpan.Zero ? left : TimeSpan.Zero;
+    }
+
+    public void MarkSent(string venueId, string action) =>
+        Sent[$"{venueId}:{action}"] = DateTimeOffset.UtcNow;
+
+    public TimeSpan ScanWait
+    {
+        get
+        {
+            if (LastScanAt == default)
+                return TimeSpan.Zero;
+            var left = TimeSpan.FromSeconds(Limits.ScanCooldownSeconds) - (DateTimeOffset.UtcNow - LastScanAt);
+            return left > TimeSpan.Zero ? left : TimeSpan.Zero;
+        }
+    }
 
     public void ResetPlot(string key)
     {
         PlotKey = key;
         PlotSince = DateTimeOffset.UtcNow;
         HopDismissed = false;
-        WrappedConfirm = false;
+        WrapSureVenue = null;
+        ObserveSince = key.Length == 0 ? default : DateTimeOffset.UtcNow;
         Check.Clear();
         HeardNames.Clear();
         SelfSpoke = false;
@@ -49,28 +86,6 @@ public sealed class PlotCheck
 
     public bool HasYard => Yard is { OnPlot: true };
     public bool HasInside => Inside is { OnPlot: true };
-    public bool Ready => HasYard && (DoorLocked || HasInside);
-    public bool Enough => Yard is { ThresholdMet: true } || Inside is { ThresholdMet: true };
-
-    public string Guide
-    {
-        get
-        {
-            if (!HasYard && !HasInside)
-                return "Stand in the yard or step inside so LightsOn can scan this layer.";
-            if (!HasYard)
-                return "Yard not scanned yet. Step outside for a moment.";
-            if (DoorLocked)
-                return Enough
-                    ? "Door locked · yard has company."
-                    : "Door locked · yard is quiet.";
-            if (!HasInside)
-                return "Yard is done. Go inside, or mark the door locked. The street cannot see the room.";
-            return Enough
-                ? "Both layers checked · enough company."
-                : "Both layers checked · quiet.";
-        }
-    }
 
     public void Absorb(ScanResult scan)
     {
@@ -82,15 +97,14 @@ public sealed class PlotCheck
             DoorLocked = false;
         }
         else
-        {
             Yard = scan;
-        }
     }
 
     public void MarkLocked()
     {
-        if (HasYard && !HasInside)
-            DoorLocked = true;
+        if (HasInside)
+            return;
+        DoorLocked = true;
     }
 
     public void Clear()
