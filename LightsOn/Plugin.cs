@@ -29,8 +29,9 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
 
+    public const string Version = "0.0.3.7";
     private const string CommandName = "/lightson";
-    private const string CommandAlias = "/lo";
+    private const string CommandAlias = "/lon";
 
     private readonly HttpClient http;
     private readonly DirectoryClient directory;
@@ -39,6 +40,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly ConfigWindow configWindow;
     private CancellationTokenSource refreshCts = new();
     private DateTime lastTick = DateTime.MinValue;
+    private DateTime lastHere = DateTime.MinValue;
     private DateTime lastPoll = DateTime.MinValue;
 
     public Configuration Configuration { get; }
@@ -68,12 +70,19 @@ public sealed class Plugin : IDalamudPlugin
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
-            HelpMessage = "LightsOn. /lo here · /lo config",
+            HelpMessage = "LightsOn. /lon here · /lon config",
         });
-        CommandManager.AddHandler(CommandAlias, new CommandInfo(OnCommand)
+        try
         {
-            HelpMessage = "Alias for /lightson.",
-        });
+            CommandManager.AddHandler(CommandAlias, new CommandInfo(OnCommand)
+            {
+                HelpMessage = "Alias for /lightson.",
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Verbose(ex, "Could not register /lon");
+        }
 
         PluginInterface.UiBuilder.Draw += WindowSystem.Draw;
         PluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUi;
@@ -100,8 +109,8 @@ public sealed class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.OpenConfigUi -= ToggleConfigUi;
         PluginInterface.UiBuilder.OpenMainUi -= ToggleMainUi;
         WindowSystem.RemoveAllWindows();
-        CommandManager.RemoveHandler(CommandName);
-        CommandManager.RemoveHandler(CommandAlias);
+        try { CommandManager.RemoveHandler(CommandName); } catch { /* already gone */ }
+        try { CommandManager.RemoveHandler(CommandAlias); } catch { /* already gone */ }
     }
 
     public void ToggleConfigUi() => configWindow.Toggle();
@@ -113,6 +122,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         var result = NearbyScan.Run(this);
         LastScanLine = result.Summary;
+        Session.LastScanAt = DateTimeOffset.UtcNow;
         if (result.OnPlot)
             Session.Check.Absorb(result);
         return result;
@@ -121,7 +131,7 @@ public sealed class Plugin : IDalamudPlugin
     public void MarkDoorLocked()
     {
         Session.Check.MarkLocked();
-        ActionLine = Session.Check.Guide;
+        ActionLine = "Door marked locked on this plot.";
     }
 
     public async Task RefreshVenues(bool force)
@@ -244,36 +254,38 @@ public sealed class Plugin : IDalamudPlugin
         if (!scan.OnPlot)
             return scan.Summary;
 
-        var doorLocked = kind == "door_locked";
-        if (doorLocked)
+        var requested = kind;
+        var doorLocked = requested == "door_locked" || (!scan.Inside && Session.Check.DoorLocked);
+        if (requested == "door_locked")
         {
             if (scan.Inside)
                 return "Mark the door from the yard.";
             kind = scan.ThresholdMet ? "happening" : "wrapped_up";
+            doorLocked = true;
         }
+
+        if (kind != "happening" && kind != "wrapped_up")
+            return "Unknown report kind.";
+
+        var action = requested == "door_locked" ? "door" : SendAction(kind, scan.Inside, false);
+        var wait = Session.SendWait(venue.Id, action);
+        if (wait > TimeSpan.Zero)
+            return $"Already sent. Try again in {(int)Math.Ceiling(wait.TotalSeconds)}s.";
 
         if (kind == "happening")
         {
-            if (!scan.ThresholdMet && !doorLocked)
+            if (!scan.ThresholdMet && requested != "door_locked")
                 return "Not enough company after your filters. Nothing sent.";
-        }
-        else if (kind == "wrapped_up")
-        {
-            if (scan.ThresholdMet)
-                return "Enough company on this layer. Wrapped up is blocked.";
-            if (DateTimeOffset.UtcNow - Configuration.ReportEnabledAt < TimeSpan.FromMinutes(Limits.OptInWrappedMinutes))
-                return "Send reports was just turned on. Wrapped up waits 20 minutes.";
-            if (Session.OnPlot < TimeSpan.FromMinutes(Limits.WrappedDwellMinutes))
-                return "Stay on the plot a couple of minutes first.";
-            if (!fromAuto && !Session.WrappedConfirm && !doorLocked)
-            {
-                Session.WrappedConfirm = true;
-                return "Press Wrapped up again to confirm.";
-            }
         }
         else
         {
-            return "Unknown report kind.";
+            if (scan.ThresholdMet && requested != "door_locked")
+                return "Enough company on this layer. Wrapped up is blocked.";
+            if (!fromAuto && requested != "door_locked" && Session.WrapSureVenue != venue.Id)
+            {
+                Session.WrapSureVenue = venue.Id;
+                return "Are you sure this layer is wrapped up? Press again to send.";
+            }
         }
 
         var here = HousingReader.Read();
@@ -292,7 +304,7 @@ public sealed class Plugin : IDalamudPlugin
                 Subdivision = here.Subdivision,
                 Inside = scan.Inside,
                 ThresholdMet = scan.ThresholdMet,
-                DoorLocked = doorLocked,
+                DoorLocked = doorLocked && !scan.Inside,
                 Voices = scan.Voices,
                 Glance = scan.Glance,
                 Music = Session.HeardMusic,
@@ -302,16 +314,32 @@ public sealed class Plugin : IDalamudPlugin
         try
         {
             await occupancy.PostReport(Configuration.OccupancyApiUrl, report, CancellationToken.None).ConfigureAwait(true);
-            Session.WrappedConfirm = false;
+            Session.WrapSureVenue = null;
+            Session.MarkSent(venue.Id, action);
             await RefreshVenues(true).ConfigureAwait(true);
             await RefreshLog(venue).ConfigureAwait(true);
-            return kind == "happening" ? "Reported: lanterns are lit." : "Reported: wrapped up.";
+            var line = kind == "happening" ? "Reported: lanterns are lit." : "Reported: wrapped up.";
+            if (report.Proof.DoorLocked)
+                line += " Door locked.";
+            Session.SetAction(venue.Id, line);
+            return line;
         }
         catch (Exception ex)
         {
             Log.Warning(ex, "Report failed");
-            return FriendlyReportError(ex);
+            var err = FriendlyReportError(ex);
+            Session.SetAction(venue.Id, err);
+            return err;
         }
+    }
+
+    private static string SendAction(string kind, bool inside, bool door)
+    {
+        if (door && !inside)
+            return "door";
+        if (kind == "happening")
+            return inside ? "happening-in" : "happening-yard";
+        return inside ? "wrapped-in" : "wrapped-yard";
     }
 
     public async Task<string> TryNote(VenueListing venue, string text)
@@ -325,7 +353,7 @@ public sealed class Plugin : IDalamudPlugin
         if (!NearbyScan.MatchesVenue(venue))
             return "Go to that plot first.";
         if (Session.OnPlot < TimeSpan.FromMinutes(Limits.LogBookDwellMinutes))
-            return "Stay about 20 minutes before leaving a note.";
+            return $"Stay about {Limits.LogBookDwellMinutes} minutes before leaving a note.";
         var trimmed = (text ?? "").Trim();
         if (Array.IndexOf(Copy.LogPhrases, trimmed) < 0)
             return "Pick a line from the list.";
@@ -401,8 +429,9 @@ public sealed class Plugin : IDalamudPlugin
         if (msg.Contains("write limit", StringComparison.OrdinalIgnoreCase)
             || msg.Contains("free tier", StringComparison.OrdinalIgnoreCase))
             return "Occupancy server is at today's write cap. Reports wait until midnight UTC.";
-        if (msg.Contains("already reported", StringComparison.OrdinalIgnoreCase))
-            return "This layer was already reported in the last 20 minutes.";
+        if (msg.Contains("already reported", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("already sent", StringComparison.OrdinalIgnoreCase))
+            return "This already went out. Wait a bit before sending again.";
         if (msg.Contains("proof does not match", StringComparison.OrdinalIgnoreCase))
             return "Scan does not match the listed plot. Nothing sent.";
         if (msg.Contains("thresholdMet", StringComparison.OrdinalIgnoreCase))
@@ -439,6 +468,12 @@ public sealed class Plugin : IDalamudPlugin
     private void OnFramework(IFramework framework)
     {
         var now = DateTime.UtcNow;
+        if ((now - lastHere).TotalMilliseconds >= 500)
+        {
+            lastHere = now;
+            var here = HousingReader.Read();
+            Session.HereLine = here.OnPlot ? here.Summary : "not on a plot";
+        }
         if ((now - lastTick).TotalSeconds < 2)
             return;
         lastTick = now;
@@ -468,25 +503,28 @@ public sealed class Plugin : IDalamudPlugin
             Session.Hop = key.Length == 0 ? null : NearbyScan.ListedHere(Venues);
         }
 
-        var venue = Session.Hop;
-        if (venue is null)
-            return;
-
         var scan = NearbyScan.Run(this);
-        LastScanLine = scan.Summary;
-        if (!NearbyScan.OccupancyEligible(venue))
-            return;
+        LastScanLine = scan.OnPlot ? scan.Summary : Session.HereLine;
         if (scan.OnPlot)
             Session.Check.Absorb(scan);
 
+        var venue = Session.Hop;
+        if (venue is null)
+            return;
+        if (!NearbyScan.OccupancyEligible(venue))
+            return;
         if (SendBlock() is not null)
             return;
         if (!Configuration.AutoHappening || !scan.OnPlot || !scan.ThresholdMet)
             return;
         if (venue.Resolution?.IsNow != true)
             return;
+        if (Session.ObserveSince == default)
+            Session.ObserveSince = DateTimeOffset.UtcNow;
+        if (DateTimeOffset.UtcNow - Session.ObserveSince < TimeSpan.FromSeconds(Limits.ObserveSeconds))
+            return;
         if (venue.Id == Session.LastAutoVenue && scan.Inside == Session.LastAutoInside
-            && DateTimeOffset.UtcNow - Session.LastAutoHappening < TimeSpan.FromMinutes(Limits.SendRateMinutes))
+            && DateTimeOffset.UtcNow - Session.LastAutoHappening < TimeSpan.FromSeconds(Limits.SendRateSeconds))
             return;
 
         _ = AutoHappening(venue, scan.Inside);
@@ -496,6 +534,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         var line = await TryReport(venue, "happening", true).ConfigureAwait(true);
         ActionLine = line;
+        Session.SetAction(venue.Id, line);
         if (line.StartsWith("Reported", StringComparison.Ordinal))
         {
             Session.LastAutoVenue = venue.Id;
@@ -525,7 +564,7 @@ public sealed class Plugin : IDalamudPlugin
 
         if (Session.InPocket < TimeSpan.FromMinutes(Limits.OutdoorDwellMinutes))
             return;
-        if (DateTimeOffset.UtcNow - Session.LastOutdoorPost < TimeSpan.FromMinutes(Limits.SendRateMinutes))
+        if (DateTimeOffset.UtcNow - Session.LastOutdoorPost < TimeSpan.FromSeconds(Limits.SendRateSeconds))
             return;
         if (scan.Tier.Length == 0)
             return;
@@ -598,10 +637,10 @@ public sealed class Plugin : IDalamudPlugin
         switch (key)
         {
             case "help":
-                Notify("/lo — open LightsOn");
-                Notify("/lo here — current plot");
-                Notify("/lo config — settings");
-                Notify("/lo refresh — reload listings");
+                Notify("/lightson — open LightsOn");
+                Notify("/lon here — current plot");
+                Notify("/lon config — settings");
+                Notify("/lon refresh — reload listings");
                 break;
             case "config":
                 ToggleConfigUi();

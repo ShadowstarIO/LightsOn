@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Game.ClientState.Objects.Types;
@@ -17,6 +18,8 @@ public readonly record struct ScanResult(
     bool InCharacter,
     bool Glance,
     bool Voices,
+    bool Seeking,
+    bool Bench,
     string Summary)
 {
     public const int Threshold = Limits.Threshold;
@@ -43,13 +46,13 @@ internal static class NearbyScan
     {
         var player = Plugin.ObjectTable.LocalPlayer;
         if (player is null)
-            return new ScanResult(false, false, false, 0, 0, false, false, false, "Not logged in");
+            return new ScanResult(false, false, false, 0, 0, false, false, false, false, false, "Not logged in");
 
         var here = HousingReader.Read();
         if (!here.OnPlot)
-            return new ScanResult(false, false, false, 0, 0, false, false, false, here.Summary);
+            return new ScanResult(false, false, false, 0, 0, false, false, false, false, false, here.Summary);
 
-        var tally = CountNearby(plugin, player);
+        var tally = CountNearby(plugin, player, here.Inside ? 0f : Limits.YardRangeYalms);
         var met = tally.Score >= ScanResult.Threshold;
         var who = plugin.Configuration.ExcludeFriends || plugin.Configuration.ExcludeFreeCompany ? "after filters" : "nearby";
         var bits = new List<string>();
@@ -68,7 +71,7 @@ internal static class NearbyScan
         if (plugin.Session.HeardMusic)
             bits.Add("music");
         var summary = string.Join(" · ", bits) + " · " + here.Summary;
-        return new ScanResult(true, here.Inside, met, tally.Score, tally.Patrons, tally.InCharacter, tally.Glance, tally.Voices, summary);
+        return new ScanResult(true, here.Inside, met, tally.Score, tally.Patrons, tally.InCharacter, tally.Glance, tally.Voices, tally.Seeking, tally.Bench, summary);
     }
 
     public static OutdoorScan RunOutdoor(Plugin plugin)
@@ -83,7 +86,7 @@ internal static class NearbyScan
         var gx = (int)MathF.Floor(pos.X / 20f);
         var gz = (int)MathF.Floor(pos.Z / 20f);
         var pocket = $"{world}|{Plugin.ClientState.TerritoryType}|{gx}|{gz}";
-        var tally = CountNearby(plugin, player);
+        var tally = CountNearby(plugin, player, Limits.YardRangeYalms);
         var tier = TierName(tally.Patrons, tally.Score);
         var summary = $"{place} · {tier}";
         return new OutdoorScan(pocket, world, place, tally.Patrons, tally.Score, tally.InCharacter, tally.Visible, tally.Familiar, tier, summary);
@@ -118,7 +121,7 @@ internal static class NearbyScan
         int Visible, int Familiar, int Patrons, int Score,
         bool InCharacter, bool Seeking, bool Bench, bool Glance, bool Voices);
 
-    private static Crowd CountNearby(Plugin plugin, IPlayerCharacter self)
+    private static Crowd CountNearby(Plugin plugin, IPlayerCharacter self, float maxRange)
     {
         var cfg = plugin.Configuration;
         var friends = cfg.ExcludeFriends ? FriendBook.Names() : null;
@@ -135,6 +138,8 @@ internal static class NearbyScan
             if (obj is null || obj.ObjectKind != ObjectKind.Pc || obj is not IPlayerCharacter pc)
                 continue;
             if (pc.EntityId == self.EntityId)
+                continue;
+            if (maxRange > 0 && Vector3.Distance(self.Position, pc.Position) > maxRange)
                 continue;
             visible++;
 

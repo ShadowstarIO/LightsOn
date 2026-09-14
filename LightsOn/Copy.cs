@@ -22,7 +22,7 @@ internal static class Copy
         "Off until you opt in. LightsOn never sends names, IDs, or how many patrons it saw. You can report the yard and the room separately — the list shows both.";
 
     public const string LogBookHint =
-        "Pick a short line from the list. Lanterns must be lit, and you need about 20 minutes on the plot. Not a free-form review.";
+        "Pick a short line from the list. Lanterns must be lit, and you need a little time on the plot. Not a free-form review.";
 
     public const string OutdoorsHint =
         "Outdoor scenes in a short pocket around you — not a whole city. After about 10 minutes in the same pocket, LightsOn can note how lively it feels. Friends and Free Company can be left out. Private gatherings can be hidden.";

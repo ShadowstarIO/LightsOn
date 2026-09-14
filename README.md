@@ -6,7 +6,7 @@ Tired of looking for a place that’s open, walking the ward, and finding the li
 
 A check can be sent from the **yard or the room** — they list separately. One layer is lighter until the other shows up. **Ward + Plot** is the property; rooms add to it.
 
-`/lightson` or `/lo`
+`/lightson` or `/lon`
 
 ## Testing
 
@@ -65,10 +65,10 @@ A second tab for moving or street scenes. Short range (a pocket, not a whole cit
 
 | Command | Action |
 | --- | --- |
-| `/lightson` `/lo` | Open the window |
-| `/lo here` | Current world and housing plot |
-| `/lo config` | Settings |
-| `/lo refresh` | Reload listings |
+| `/lightson` `/lon` | Open the window |
+| `/lon here` | Current world and housing plot |
+| `/lon config` | Settings |
+| `/lon refresh` | Reload listings |
 
 ## Docs
 

@@ -138,7 +138,7 @@ public sealed class ConfigWindow : Window
         Line("A glance", "You or a patron has the other targeted. +1 total.");
         Line("Someone reached out", "Tell or party chat with a patron here. +1 total.");
         Line("Voices nearby", "Say with a patron here. Off unless you turn it on. +1 total.");
-        ImGui.TextDisabled("Enough company = score 3 on that layer. Yard and room are sent separately. Ward + Plot is the property; rooms add to it. Apartment buildings without a plot are not checked.");
+        ImGui.TextDisabled("Enough company = score 3 on that layer. Yard scan is about one plot-edge (20 yalms). The room is everyone in the house.");
 
         ImGui.Separator();
         UiTheme.Section("Reporter id");

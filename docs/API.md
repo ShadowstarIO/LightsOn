@@ -2,7 +2,7 @@
 
 v1. HTTPS hostname required. No IPs.
 
-Public window: **20 minutes**. Reporter ids never leave the worker.
+Public window: **20 minutes**. Reporter ids never leave the worker. One player send is one `INSERT`. Occupancy is derived on GET. About 30 POSTs/minute per isolate; plugin timers (~45s per action) should rarely hit that.
 
 ## `GET /v1/occupancy`
 
