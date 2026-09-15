@@ -24,21 +24,19 @@ public sealed class PlotWindow : Window
 
     public override void Draw()
     {
+        ImGui.TextColored(UiTheme.Teal, plugin.Session.HereLine);
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Where you are. Star is people in range, not a zone census.");
+
         var venue = plugin.Session.Hop ?? NearbyScan.ListedHere(plugin.Venues);
         if (venue is null)
         {
-            ImGui.TextWrapped(plugin.Session.HereLine);
             ImGui.TextDisabled("Not on a listed plot.");
-            if (ImGui.SmallButton("Full View"))
+            if (ImGui.SmallButton("Full"))
                 plugin.ToggleMainUi();
             return;
         }
 
-        if (ImGui.SmallButton("Full View"))
-        {
-            plugin.SelectVenue(venue.Id);
-            plugin.ToggleMainUi();
-        }
         UiTheme.Gap();
         ImGui.Separator();
         VenueView.Draw(plugin, venue, true);

@@ -30,7 +30,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
 
-    public const string Version = "0.0.4.0";
+    public const string Version = "0.0.4.1";
     private const string CommandName = "/lightson";
     private const string CommandAlias = "/lon";
 
@@ -61,7 +61,7 @@ public sealed class Plugin : IDalamudPlugin
         Configuration.Save();
 
         http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.4.0 (+https://github.com/XozaShadow/LightsOn)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.4.1 (+https://github.com/XozaShadow/LightsOn)");
         directory = new DirectoryClient(http);
         occupancy = new OccupancyClient(http);
 
@@ -122,6 +122,12 @@ public sealed class Plugin : IDalamudPlugin
     public void TogglePlotWindow() => plotWindow.IsOpen = !plotWindow.IsOpen;
     public void OpenPlotWindow() => plotWindow.IsOpen = true;
     public void SelectVenue(string id) => mainWindow.Select(id);
+    public void ShowMini() => plotWindow.IsOpen = true;
+    public void ShowFull(string id)
+    {
+        mainWindow.Select(id);
+        mainWindow.IsOpen = true;
+    }
     public bool MainUiOpen => mainWindow.IsOpen;
     public bool PlotUiOpen => plotWindow.IsOpen;
     public void Notify(string text) => Chat.Print("[LightsOn] " + text);
@@ -468,15 +474,88 @@ public sealed class Plugin : IDalamudPlugin
         {
             await occupancy.PostOutdoor(Configuration.OccupancyApiUrl, report, CancellationToken.None).ConfigureAwait(true);
             Session.LastOutdoorPost = DateTimeOffset.UtcNow;
+            Session.LastOutdoorPocket = scan.Pocket;
+            Session.LastOutdoorTier = scan.Tier;
             Session.OutdoorPrivate = null;
-            await RefreshVenues(true).ConfigureAwait(true);
-            return privateGathering == true ? "Marked private. It will stay off the list if others agree." : "Outdoor scene noted.";
+            Session.ClearWatch();
+            Session.OutdoorLine = privateGathering == true
+                ? "Marked private. It will stay off the list if others agree."
+                : "Outdoor scene noted.";
+            await RefreshOutdoors().ConfigureAwait(true);
+            return Session.OutdoorLine;
         }
         catch (Exception ex)
         {
             Log.Warning(ex, "Outdoor report failed");
-            return "Outdoor note did not reach the server.";
+            Session.OutdoorLine = "Outdoor note did not reach the server.";
+            return Session.OutdoorLine;
         }
+    }
+
+    public async Task RefreshOutdoors()
+    {
+        if (!Configuration.OccupancyEnabled)
+        {
+            Outdoors = [];
+            return;
+        }
+        try
+        {
+            Outdoors = await occupancy.GetOutdoors(Configuration.OccupancyApiUrl, CancellationToken.None)
+                .ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            Log.Verbose(ex, "Outdoors refresh failed");
+        }
+    }
+
+    public void StartOutdoorWatch()
+    {
+        if (Session.PlotKey.Length > 0)
+        {
+            Session.OutdoorLine = "Outdoor notes are for the street, not plots.";
+            return;
+        }
+        var scan = NearbyScan.RunOutdoor(this);
+        if (scan.Pocket.Length == 0)
+        {
+            Session.OutdoorLine = "Not in a place LightsOn can note.";
+            return;
+        }
+        Session.PocketKey = scan.Pocket;
+        Session.PocketSince = DateTimeOffset.UtcNow;
+        Session.WatchPocket = scan.Pocket;
+        Session.WatchSince = DateTimeOffset.UtcNow;
+        Session.WatchPeak = scan;
+        Session.WatchBusyHits = NearbyScan.TierRank(scan.Tier) >= 3 ? 1 : 0;
+        Session.WatchReady = false;
+        Session.WatchLine = $"Stay in this area · {Limits.OutdoorWatchSeconds}s";
+        Session.OutdoorLine = "";
+    }
+
+    public void CancelOutdoorWatch()
+    {
+        Session.ClearWatch();
+        Session.OutdoorLine = "Scan cancelled.";
+    }
+
+    public async Task FinishOutdoorWatch()
+    {
+        var peak = Session.WatchPeak;
+        if (peak.Pocket.Length == 0 || peak.Tier.Length == 0)
+        {
+            Session.ClearWatch();
+            Session.OutdoorLine = "Quiet here. Nothing to note.";
+            return;
+        }
+        if (peak.AskPrivate)
+        {
+            Session.OutdoorPrivate = new OutdoorPending { Scan = peak };
+            Session.ClearWatch();
+            return;
+        }
+        Session.OutdoorLine = await TryOutdoor(peak, null).ConfigureAwait(true);
     }
 
     private static string FriendlyReportError(Exception ex)
@@ -527,16 +606,17 @@ public sealed class Plugin : IDalamudPlugin
         if ((now - lastHere).TotalMilliseconds >= 500)
         {
             lastHere = now;
-            var here = HousingReader.Read();
-            Session.HereLine = here.OnPlot ? here.Summary : "not on a plot";
+            Session.HereLine = Here.Line();
         }
-        if ((now - lastTick).TotalSeconds < (MainUiOpen || plotWindow.IsOpen ? 2 : Limits.BackgroundTickSeconds))
+        var tickSeconds = MainUiOpen || plotWindow.IsOpen || Session.Watching ? 2 : Limits.BackgroundTickSeconds;
+        if ((now - lastTick).TotalSeconds < tickSeconds)
             return;
         lastTick = now;
         if (!ClientState.IsLoggedIn)
             return;
 
         TickPlot();
+        TickOutdoorWatch();
         TickOutdoor();
 
         if ((now - lastPoll).TotalSeconds > 180)
@@ -547,6 +627,11 @@ public sealed class Plugin : IDalamudPlugin
     {
         Session.PocketKey = "";
         Session.OutdoorPrivate = null;
+        if (Session.Watching)
+        {
+            Session.ClearWatch();
+            Session.WatchLine = "Left the area. Scan cancelled.";
+        }
     }
 
     private void TickPlot()
@@ -636,8 +721,6 @@ public sealed class Plugin : IDalamudPlugin
 
     private void TickOutdoor()
     {
-        if (!Configuration.NoteOutdoorScenes || SendBlock() is not null)
-            return;
         if (Session.PlotKey.Length > 0)
             return;
 
@@ -649,10 +732,18 @@ public sealed class Plugin : IDalamudPlugin
             Session.PocketKey = scan.Pocket;
             Session.PocketSince = DateTimeOffset.UtcNow;
             Session.OutdoorPrivate = null;
-            return;
+            if (!Session.Watching)
+                return;
         }
 
+        if (Session.Watching)
+            return;
+        if (!Configuration.NoteOutdoorScenes || SendBlock() is not null)
+            return;
+
         if (Session.InPocket < TimeSpan.FromMinutes(Limits.OutdoorDwellMinutes))
+            return;
+        if (Session.OutdoorWait(scan.Pocket, scan.Tier) > TimeSpan.Zero)
             return;
         if (DateTimeOffset.UtcNow - Session.LastOutdoorPost < TimeSpan.FromSeconds(Limits.SendRateSeconds))
             return;
@@ -667,6 +758,54 @@ public sealed class Plugin : IDalamudPlugin
 
         Session.LastOutdoorPost = DateTimeOffset.UtcNow;
         _ = TryOutdoor(scan, null);
+    }
+
+    private void TickOutdoorWatch()
+    {
+        if (!Session.Watching)
+            return;
+        if (Session.PlotKey.Length > 0)
+        {
+            Session.ClearWatch();
+            Session.WatchLine = "Outdoor notes are for the street.";
+            return;
+        }
+
+        var scan = NearbyScan.RunOutdoor(this);
+        if (scan.Pocket.Length == 0 || scan.Pocket != Session.WatchPocket)
+        {
+            Session.ClearWatch();
+            Session.WatchLine = "Left the area. Scan cancelled.";
+            Session.OutdoorLine = Session.WatchLine;
+            return;
+        }
+
+        Session.PocketKey = scan.Pocket;
+        if (NearbyScan.TierRank(scan.Tier) > NearbyScan.TierRank(Session.WatchPeak.Tier))
+            Session.WatchPeak = scan;
+        if (NearbyScan.TierRank(scan.Tier) >= 3)
+            Session.WatchBusyHits++;
+        else
+            Session.WatchBusyHits = 0;
+
+        var elapsed = (DateTimeOffset.UtcNow - Session.WatchSince).TotalSeconds;
+        var need = Limits.OutdoorWatchSeconds;
+        if (Session.WatchBusyHits >= 3 && elapsed >= Limits.OutdoorWatchBusySeconds)
+            need = Limits.OutdoorWatchBusySeconds;
+        else if (NearbyScan.TierRank(Session.WatchPeak.Tier) >= 2)
+            need = Limits.OutdoorWatchSomeSeconds;
+
+        if (elapsed < need)
+        {
+            Session.WatchReady = false;
+            Session.WatchLine = $"Stay in this area · {Math.Max(1, (int)Math.Ceiling(need - elapsed))}s";
+            return;
+        }
+
+        Session.WatchReady = true;
+        Session.WatchLine = Session.WatchPeak.Tier.Length == 0
+            ? "Quiet here. Nothing to note."
+            : $"Looks {NearbyScan.TierLabel(Session.WatchPeak.Tier).ToLowerInvariant()}. Note this pocket?";
     }
 
     private void OnChat(IHandleableChatMessage message)
@@ -750,8 +889,7 @@ public sealed class Plugin : IDalamudPlugin
                     Notify("Not logged in.");
                     break;
                 }
-                var here = HousingReader.Read();
-                Notify($"{NearbyScan.CurrentWorldName()} · {here.Summary}");
+                Notify(Here.Line());
                 break;
             }
             default:

@@ -8,21 +8,21 @@ Testing host (public GET): `https://REDACTED`
 
 Writes (**POST**) are not a public API. They require a private ingest key compiled into the shipping plugin.
 
-Windows: **60 minutes** lanterns, **45 minutes** quiet, cap 12 rows. Notes: **7 days**, cap 12.
+Windows: occupancy while posted hours are on, **up to 4 hours**, weight `1 / max(1, hours old)`. Cap 12 rows. Notes: **7 days**, cap 12. Outdoors list: **20 minutes**.
 
 ## Read (public)
 
 | Method | Path | What |
 | --- | --- | --- |
 | GET | `/v1/health` | Worker up, recent report count |
-| GET | `/v1/occupancy` | Snapshot per listing: `venueId`, `state` (`happening` \| `wrapped_up` \| `mixed`), layer counts, `doorLocked`, `updatedAt`, `expiresAt` |
-| GET | `/v1/reports?venueId=` | Last 60 minutes for one listing. Kind, yard vs inside, chips. Cap 12. |
+| GET | `/v1/occupancy` | Snapshot per listing: `venueId`, `state` (`happening` \| `wrapped_up` \| `mixed`), layer counts, `lean`, `doorLocked`, `updatedAt`, `expiresAt` |
+| GET | `/v1/reports?venueId=` | Last 4 hours for one listing, while hours are on. Kind, yard vs inside, chips. Cap 12. |
 | GET | `/v1/notes?venueId=` | Active log-book lines. Phrases only. |
-| GET | `/v1/outdoors` | Short-range outdoor pockets |
+| GET | `/v1/outdoors` | Short-range outdoor pockets, last 20 minutes |
 
 Cached about 60s. CORS is open for GET.
 
-Lean is interior×2 + exterior, happening minus quiet.
+Lean is interior×2 + exterior, happening minus quiet, each report weighted by age (`1 / max(1, hours)`). Unique reporters; latest per person per layer.
 
 ## Write (plugin only)
 

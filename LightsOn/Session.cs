@@ -19,6 +19,8 @@ public sealed class Session
     public bool LastAutoInside { get; set; }
     public DateTimeOffset LastAutoHappening { get; set; }
     public DateTimeOffset LastOutdoorPost { get; set; }
+    public string LastOutdoorPocket { get; set; } = "";
+    public string LastOutdoorTier { get; set; } = "";
     public DateTimeOffset ObserveSince { get; set; }
     public DateTimeOffset LastScanAt { get; set; }
     public OutdoorPending? OutdoorPrivate { get; set; }
@@ -26,10 +28,19 @@ public sealed class Session
     public HashSet<string> HeardNames { get; } = new(StringComparer.OrdinalIgnoreCase);
     public bool SelfSpoke { get; set; }
     public bool HeardMusic { get; set; }
-    public string HereLine { get; set; } = "not on a plot";
+    public string HereLine { get; set; } = "Not logged in.";
     public Dictionary<string, string> ActionByVenue { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, DateTimeOffset> Sent { get; } = new(StringComparer.Ordinal);
 
+    public string WatchPocket { get; set; } = "";
+    public DateTimeOffset WatchSince { get; set; }
+    public OutdoorScan WatchPeak { get; set; }
+    public int WatchBusyHits { get; set; }
+    public bool WatchReady { get; set; }
+    public string WatchLine { get; set; } = "";
+    public string OutdoorLine { get; set; } = "";
+
+    public bool Watching => WatchPocket.Length > 0;
     public TimeSpan OnPlot => PlotKey.Length == 0 ? TimeSpan.Zero : DateTimeOffset.UtcNow - PlotSince;
     public TimeSpan InPocket => PocketKey.Length == 0 ? TimeSpan.Zero : DateTimeOffset.UtcNow - PocketSince;
 
@@ -53,6 +64,20 @@ public sealed class Session
     public void MarkSent(string venueId, string action) =>
         Sent[$"{venueId}:{action}"] = DateTimeOffset.UtcNow;
 
+    public TimeSpan OutdoorWait(string pocket, string newTier)
+    {
+        if (LastOutdoorPocket.Length == 0 || LastOutdoorPocket != pocket || LastOutdoorPost == default)
+            return TimeSpan.Zero;
+        var elapsed = DateTimeOffset.UtcNow - LastOutdoorPost;
+        var lastRank = NearbyScan.TierRank(LastOutdoorTier);
+        var nextRank = NearbyScan.TierRank(newTier);
+        var need = nextRank > lastRank
+            ? TimeSpan.FromMinutes(Limits.OutdoorUpgradeMinutes)
+            : TimeSpan.FromMinutes(NearbyScan.LockMinutes(LastOutdoorTier));
+        var left = need - elapsed;
+        return left > TimeSpan.Zero ? left : TimeSpan.Zero;
+    }
+
     public TimeSpan ScanWait
     {
         get
@@ -62,6 +87,16 @@ public sealed class Session
             var left = TimeSpan.FromSeconds(Limits.ScanCooldownSeconds) - (DateTimeOffset.UtcNow - LastScanAt);
             return left > TimeSpan.Zero ? left : TimeSpan.Zero;
         }
+    }
+
+    public void ClearWatch()
+    {
+        WatchPocket = "";
+        WatchSince = default;
+        WatchPeak = default;
+        WatchBusyHits = 0;
+        WatchReady = false;
+        WatchLine = "";
     }
 
     public void ResetPlot(string key)
@@ -80,6 +115,8 @@ public sealed class Session
         SelfSpoke = false;
         HeardMusic = false;
         Hop = null;
+        if (key.Length > 0)
+            ClearWatch();
     }
 }
 

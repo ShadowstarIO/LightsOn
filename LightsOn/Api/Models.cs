@@ -118,10 +118,15 @@ public sealed class OccupancySnapshot
     public bool BothLayers { get; set; }
     public DateTimeOffset? UpdatedAt { get; set; }
     public DateTimeOffset? ExpiresAt { get; set; }
+    public float? Lean { get; set; }
 
     [JsonIgnore] public bool IsHappening => State is "happening" or "mixed";
     [JsonIgnore] public bool IsWrappedUp => State == "wrapped_up";
     [JsonIgnore] public bool IsMixed => State == "mixed";
+
+    [JsonIgnore]
+    public float LeanValue =>
+        Lean ?? InteriorHappening * 2 + ExteriorHappening - InteriorWrapped * 2 - ExteriorWrapped;
 }
 
 public sealed class OccupancyEvent

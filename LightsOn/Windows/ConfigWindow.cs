@@ -157,7 +157,7 @@ public sealed class ConfigWindow : Window
             cfg.NoteOutdoorScenes = outdoors;
             cfg.Save();
         }
-        UiTheme.Hint("Short-range outdoor pockets. Not a whole city. Friends and Free Company can be left out.");
+        UiTheme.Hint("Short-range street pockets. Scan and stay, or wait about 10 minutes. Busier scenes note sooner.");
 
         UiTheme.Gap();
         ImGui.Separator();

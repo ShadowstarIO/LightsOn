@@ -2,12 +2,19 @@ namespace LightsOn;
 
 internal static class Limits
 {
-    public const int OccupancyMinutes = 60;
-    public const int QuietMinutes = 45;
+    public const int OccupancyHours = 4;
     public const int SendRateSeconds = 45;
     public const int ResetLockMinutes = 20;
     public const int LogBookDwellMinutes = 8;
     public const int OutdoorDwellMinutes = 10;
+    public const int OutdoorListMinutes = 20;
+    public const int OutdoorWatchSeconds = 60;
+    public const int OutdoorWatchBusySeconds = 15;
+    public const int OutdoorWatchSomeSeconds = 30;
+    public const int OutdoorLockWanderingMinutes = 20;
+    public const int OutdoorLockActivityMinutes = 8;
+    public const int OutdoorLockBusyMinutes = 3;
+    public const int OutdoorUpgradeMinutes = 3;
     public const int ObserveSeconds = 15;
     public const int ScanCooldownSeconds = 20;
     public const float YardRangeYalms = 20f;
