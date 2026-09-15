@@ -19,8 +19,6 @@ public sealed class MainWindow : Window
     private string worldFilter = "";
     private int filter;
     private string? selectedId;
-    private int noteIdx;
-    private string? notesFor;
     private static readonly string[] StatusFilters = ["All", "Lanterns lit", "Open now", "Vacant", "No data"];
 
     public MainWindow(Plugin plugin)
@@ -50,7 +48,6 @@ public sealed class MainWindow : Window
             ImGui.Separator();
         }
 
-        DrawHop();
         DrawPrivateAsk();
 
         if (ImGui.BeginTabBar("lo-tabs"))
@@ -69,20 +66,7 @@ public sealed class MainWindow : Window
         }
     }
 
-    private void DrawHop()
-    {
-        var venue = plugin.Session.Hop;
-        if (venue is null || plugin.Session.HopDismissed || !plugin.Configuration.PromptOnEnter)
-            return;
-        if (!NearbyScan.MatchesVenue(venue))
-            return;
-
-        ImGui.TextWrapped($"{venue.Name ?? ""} — {venue.HoursLine}");
-        DrawCheck(venue, true);
-        if (ImGui.SmallButton("Not now"))
-            plugin.Session.HopDismissed = true;
-        ImGui.Separator();
-    }
+    public void Select(string id) => selectedId = id;
 
     private void DrawPrivateAsk()
     {
@@ -164,6 +148,27 @@ public sealed class MainWindow : Window
 
         var listW = Math.Max(280, ImGui.GetContentRegionAvail().X * 0.46f);
         ImGui.BeginChild("list", new Vector2(listW, -1), true);
+        var openRows = rows.Where(v => v.Resolution?.IsNow == true).ToList();
+        var laterRows = rows.Where(v => v.Resolution?.IsNow != true).ToList();
+        DrawVenueRows(openRows);
+        if (openRows.Count > 0 && laterRows.Count > 0)
+            ImGui.Separator();
+        DrawVenueRows(laterRows);
+        if (rows.Count == 0)
+            ImGui.TextDisabled("No venues match.");
+        ImGui.EndChild();
+
+        ImGui.SameLine();
+        ImGui.BeginChild("detail", new Vector2(0, -1), true);
+        if (selected is null)
+            ImGui.TextDisabled("Pick a venue.");
+        else
+            VenueView.Draw(plugin, selected, false);
+        ImGui.EndChild();
+    }
+
+    private void DrawVenueRows(List<VenueListing> rows)
+    {
         foreach (var venue in rows)
         {
             var loc = venue.Location;
@@ -176,7 +181,7 @@ public sealed class MainWindow : Window
             if (open)
             {
                 ImGui.SameLine();
-                var (label, color) = OpenBadge(occ);
+                var (label, color) = VenueView.OpenBadge(occ);
                 ImGui.TextColored(color, label);
             }
             if (loc is not null)
@@ -185,237 +190,6 @@ public sealed class MainWindow : Window
                 ImGui.TextDisabled(loc.Address);
             }
         }
-        if (rows.Count == 0)
-            ImGui.TextDisabled("No venues match.");
-        ImGui.EndChild();
-
-        ImGui.SameLine();
-        ImGui.BeginChild("detail", new Vector2(0, -1), true);
-        if (selected is null)
-            ImGui.TextDisabled("Pick a venue.");
-        else
-            DrawDetail(selected);
-        ImGui.EndChild();
-    }
-
-    private void DrawDetail(VenueListing venue)
-    {
-        var loc = venue.Location;
-        var occ = venue.Occupancy ?? OccupancySnapshot.Unknown;
-        ImGui.TextWrapped(venue.Name ?? "");
-        ImGui.TextWrapped(venue.HoursLine);
-        if (loc is not null)
-        {
-            ImGui.TextWrapped(loc.Address);
-            if (Lifestream.Installed() && Reach.CanVisitWorld(loc.World))
-            {
-                ImGui.SameLine();
-                if (ImGui.SmallButton("Travel to"))
-                {
-                    try { Lifestream.Go(loc); }
-                    catch (Exception ex) { plugin.ActionLine = "Travel failed."; Plugin.Log.Verbose(ex, "Lifestream"); }
-                }
-            }
-        }
-
-        ImGui.TextDisabled(FlagsLine(venue));
-
-        ImGui.Spacing();
-        var lean = Lean(occ);
-        if (lean > 0)
-        {
-            ImGui.TextColored(UiTheme.Happening, Copy.Happening);
-            ImGui.TextWrapped(SummaryLine(occ, venue.Log));
-        }
-        else if (lean < 0)
-        {
-            ImGui.TextColored(lean < 0 && occ.InteriorWrapped > 0 && occ.ExteriorWrapped > 0
-                ? UiTheme.Orange
-                : UiTheme.Wrapped, Copy.Wrapped);
-            ImGui.TextWrapped(SummaryLine(occ, venue.Log));
-        }
-        else if (occ.HappeningReports + occ.WrappedUpReports > 0)
-        {
-            ImGui.TextColored(UiTheme.Amber, "Split reports");
-            ImGui.TextWrapped(Copy.MixedReports);
-        }
-        else
-            ImGui.TextDisabled(Copy.NoReport);
-
-        if (occ.BothLayers)
-            ImGui.TextDisabled("Yard and room both reported.");
-        else if (occ.HappeningReports + occ.WrappedUpReports > 0)
-            ImGui.TextDisabled("One layer only — lighter weight until the other is reported.");
-
-        ImGui.Spacing();
-        UiTheme.Section("On this plot", true);
-        ImGui.TextDisabled(plugin.Session.HereLine);
-        DrawCheck(venue, false);
-        var action = plugin.Session.ActionFor(venue.Id);
-        if (action.Length > 0)
-            ImGui.TextWrapped(action);
-
-        DrawReportLog(venue);
-        DrawLogBook(venue, loc is not null && NearbyScan.MatchesVenue(venue));
-    }
-
-    private void DrawCheck(VenueListing venue, bool compact)
-    {
-        if (!NearbyScan.OccupancyEligible(venue))
-        {
-            ImGui.TextDisabled(Copy.NoPlot);
-            return;
-        }
-
-        var onPlot = NearbyScan.MatchesVenue(venue);
-        var here = HousingReader.Read();
-        if (!onPlot)
-        {
-            if (here.OnPlot)
-                ImGui.TextWrapped($"You are at {here.Summary}. This listing is a different plot — travel there to report.");
-            else
-                ImGui.TextDisabled("Travel to the plot to report this layer.");
-            return;
-        }
-
-        ImGui.TextWrapped(here.Inside ? "You are inside." : "You are in the yard.");
-        ImGui.TextWrapped(plugin.LastScanLine);
-
-        var scanWait = plugin.Session.ScanWait;
-        if (scanWait > TimeSpan.Zero)
-            ImGui.BeginDisabled();
-        if (ImGui.Button(scanWait > TimeSpan.Zero
-                ? $"Scan ({(int)Math.Ceiling(scanWait.TotalSeconds)}s)"
-                : "Scan"))
-        {
-            var snap = plugin.ScanNow();
-            plugin.Session.SetAction(venue.Id, snap.Summary);
-        }
-        if (scanWait > TimeSpan.Zero)
-            ImGui.EndDisabled();
-
-        if (plugin.Session.ObserveSince != default)
-        {
-            var observe = DateTimeOffset.UtcNow - plugin.Session.ObserveSince;
-            if (observe < TimeSpan.FromSeconds(Limits.ObserveSeconds))
-            {
-                var left = Limits.ObserveSeconds - (int)observe.TotalSeconds;
-                ImGui.SameLine();
-                ImGui.TextDisabled($"watching {left}s");
-            }
-        }
-
-        ImGui.Spacing();
-        var canSend = plugin.CanSend;
-        DrawSend(venue, here.Inside ? Copy.HappeningButton : Copy.YardBusy, "happening", canSend, here.Inside);
-        ImGui.SameLine();
-        DrawSend(venue, here.Inside ? Copy.WrappedButton : Copy.YardQuiet, "wrapped_up", canSend, here.Inside);
-        if (!here.Inside)
-        {
-            ImGui.SameLine();
-            DrawSend(venue, Copy.DoorLocked, "door_locked", canSend, false);
-        }
-
-        if (!canSend)
-            ImGui.TextDisabled(plugin.Configuration.ListingsOnly
-                ? "Listings only is on."
-                : plugin.Configuration.ReporterResetLockRemaining > TimeSpan.Zero
-                    ? "Reports locked after reporter id reset."
-                    : "Settings → Send reports.");
-        else
-            ImGui.TextDisabled("Scan is local. Send is one write with everything this snapshot saw.");
-        _ = compact;
-    }
-
-    private void DrawSend(VenueListing venue, string label, string kind, bool canSend, bool inside)
-    {
-        var action = kind == "door_locked"
-            ? "door"
-            : kind == "happening"
-                ? (inside ? "happening-in" : "happening-yard")
-                : (inside ? "wrapped-in" : "wrapped-yard");
-        var wait = plugin.Session.SendWait(venue.Id, action);
-        var blocked = !canSend || wait > TimeSpan.Zero;
-        if (blocked)
-            ImGui.BeginDisabled();
-        var text = wait > TimeSpan.Zero ? $"{label} ({(int)Math.Ceiling(wait.TotalSeconds)}s)" : label;
-        if (ImGui.Button($"{text}##{action}"))
-            _ = Report(venue, kind);
-        if (blocked)
-            ImGui.EndDisabled();
-    }
-
-    private void DrawReportLog(VenueListing venue)
-    {
-        if (notesFor != venue.Id)
-        {
-            notesFor = venue.Id;
-            noteIdx = 0;
-            _ = plugin.RefreshLog(venue);
-            _ = plugin.RefreshNotes(venue);
-        }
-
-        var log = venue.Log;
-        var exterior = log.Where(e => !e.Inside).Take(12).ToList();
-        var interior = log.Where(e => e.Inside).Take(12).ToList();
-        var locked = log.Any(e => e.DoorLocked) || venue.Occupancy.DoorLocked;
-
-        ImGui.Separator();
-        var extScore = Score(exterior);
-        ImGui.TextColored(UiTheme.Teal, $"Exterior reports  {extScore}");
-        if (exterior.Count == 0)
-            ImGui.TextDisabled("None yet.");
-        foreach (var row in exterior)
-            ImGui.TextWrapped(EventLine(row));
-
-        ImGui.Separator();
-        var intScore = Score(interior);
-        var lockMark = locked ? "  🔒" : "";
-        ImGui.TextColored(UiTheme.Teal, $"Interior reports{lockMark}  {intScore}");
-        if (locked && interior.Count == 0)
-        {
-            ImGui.TextWrapped(venue.Occupancy?.IsHappening == true || exterior.Any(e => e.Kind == "happening")
-                ? "Door is locked. Activity is in the yard — see exterior reports."
-                : "Door is locked. See exterior reports.");
-        }
-        else if (interior.Count == 0)
-            ImGui.TextDisabled("None yet.");
-        foreach (var row in interior)
-            ImGui.TextWrapped(EventLine(row));
-    }
-
-    private void DrawLogBook(VenueListing venue, bool onPlot)
-    {
-        ImGui.Separator();
-        UiTheme.Section("Log book", true);
-        ImGui.TextWrapped(Copy.LogBookHint);
-        if (venue.Notes.Count == 0)
-            ImGui.TextDisabled("No notes yet.");
-        foreach (var note in venue.Notes.Take(12))
-            ImGui.TextWrapped($"· {note.Text}  {Age(note.At)}");
-
-        var ready = onPlot && plugin.Configuration.AllowLogBook && plugin.CanSend
-                    && venue.Occupancy?.IsHappening == true
-                    && plugin.Session.OnPlot >= TimeSpan.FromMinutes(Limits.LogBookDwellMinutes);
-        if (!ready)
-        {
-            if (!onPlot)
-                ImGui.TextDisabled("Go to the plot to leave a note.");
-            else if (venue.Occupancy?.IsHappening != true)
-                ImGui.TextDisabled("Log book opens when lanterns are lit.");
-            else
-            {
-                var left = TimeSpan.FromMinutes(Limits.LogBookDwellMinutes) - plugin.Session.OnPlot;
-                var mins = Math.Max(1, (int)Math.Ceiling(Math.Max(0, left.TotalMinutes)));
-                ImGui.TextDisabled($"Ready in {mins} minute{(mins == 1 ? "" : "s")}.");
-            }
-            return;
-        }
-
-        ImGui.SetNextItemWidth(-1);
-        ImGui.Combo("##phrase", ref noteIdx, Copy.LogPhrases, Copy.LogPhrases.Length);
-        if (ImGui.Button("Leave note"))
-            _ = LeaveNote(venue, Copy.LogPhrases[Math.Clamp(noteIdx, 0, Copy.LogPhrases.Length - 1)]);
     }
 
     private void DrawOutdoors()
@@ -456,19 +230,6 @@ public sealed class MainWindow : Window
             }
             ImGui.TextDisabled($"{row.Reports} note{(row.Reports == 1 ? "" : "s")} · {Age(row.UpdatedAt)}");
         }
-    }
-
-    private async System.Threading.Tasks.Task Report(VenueListing venue, string kind)
-    {
-        plugin.ActionLine = "Scanning…";
-        var line = await plugin.TryReport(venue, kind).ConfigureAwait(true);
-        plugin.ActionLine = line;
-        plugin.Session.SetAction(venue.Id, line);
-    }
-
-    private async System.Threading.Tasks.Task LeaveNote(VenueListing venue, string text)
-    {
-        plugin.ActionLine = await plugin.TryNote(venue, text).ConfigureAwait(true);
     }
 
     private bool Matches(VenueListing venue)
@@ -521,74 +282,6 @@ public sealed class MainWindow : Window
         ImGui.EndCombo();
     }
 
-    private static string FlagsLine(VenueListing venue)
-    {
-        var bits = new System.Collections.Generic.List<string> { venue.Sfw ? "SFW" : "NSFW" };
-        if (venue.Hiring)
-            bits.Add("Hiring");
-        if (!string.IsNullOrWhiteSpace(venue.Website))
-            bits.Add("Website");
-        if (!string.IsNullOrWhiteSpace(venue.Discord))
-            bits.Add("Discord");
-        return string.Join(" · ", bits);
-    }
-
-    private static string SummaryLine(OccupancySnapshot occ, System.Collections.Generic.IReadOnlyList<OccupancyEvent> log)
-    {
-        var bits = new System.Collections.Generic.List<string>();
-        if (occ.DoorLocked || log.Any(e => e.DoorLocked))
-            bits.Add("🔒 door");
-        else
-            bits.Add("Unlocked");
-        if (log.Any(e => e.ThresholdMet))
-            bits.Add("Patrons");
-        if (log.Any(e => e.Voices))
-            bits.Add("Voices nearby");
-        if (log.Any(e => e.Glance))
-            bits.Add("Glances");
-        if (log.Any(e => e.Music))
-            bits.Add("Music");
-        var inside = occ.InteriorHappening + occ.InteriorWrapped;
-        var outside = occ.ExteriorHappening + occ.ExteriorWrapped;
-        if (inside > outside)
-            bits.Add("Mostly inside");
-        else if (outside > inside)
-            bits.Add("Mostly yard");
-        if (occ.IsWrappedUp && bits.Count <= 1)
-            bits.Add("Quiet");
-        return string.Join(" · ", bits);
-    }
-
-    private static string EventLine(OccupancyEvent row)
-    {
-        var what = row.Inside
-            ? (row.Kind == "happening" ? Copy.Happening : Copy.Wrapped)
-            : (row.Kind == "happening" ? Copy.YardBusy : Copy.YardQuiet);
-        var bits = new System.Collections.Generic.List<string> { what };
-        if (row.DoorLocked)
-            bits.Add("🔒");
-        if (row.ThresholdMet)
-            bits.Add("patrons");
-        if (row.Voices)
-            bits.Add("voices");
-        if (row.Glance)
-            bits.Add("glance");
-        if (row.Music)
-            bits.Add("music");
-        if (!row.ThresholdMet && row.Kind != "happening")
-            bits.Add("quiet");
-        return $"{Age(row.At)}  {string.Join(" · ", bits)}";
-    }
-
-    private static string Score(System.Collections.Generic.List<OccupancyEvent> rows)
-    {
-        var up = rows.Count(e => e.Kind == "happening");
-        var down = rows.Count(e => e.Kind == "wrapped_up");
-        if (up == 0 && down == 0)
-            return "";
-        return $"+{up} / -{down}";
-    }
-
     private static int TierRank(string tier) => tier switch
     {
         "extremely_busy" => 0,
@@ -608,22 +301,4 @@ public sealed class MainWindow : Window
             return $"{mins}m ago";
         return $"{mins / 60}h ago";
     }
-
-    private static (string Label, Vector4 Color) OpenBadge(OccupancySnapshot occ)
-    {
-        if (occ.HappeningReports == 0 && occ.WrappedUpReports == 0)
-            return ("open?", UiTheme.Yellow);
-        var lean = Lean(occ);
-        if (lean > 0)
-            return ("open!", UiTheme.Happening);
-        if (lean == 0)
-            return ("open~", UiTheme.Amber);
-        if (occ.InteriorWrapped > 0 && occ.ExteriorWrapped > 0 && occ.HappeningReports == 0)
-            return ("open~", UiTheme.Orange);
-        return ("open~", UiTheme.Yellow);
-    }
-
-    private static int Lean(OccupancySnapshot occ) =>
-        occ.InteriorHappening * 2 + occ.ExteriorHappening
-        - occ.InteriorWrapped * 2 - occ.ExteriorWrapped;
 }

@@ -50,7 +50,7 @@ public sealed class ConfigWindow : Window
         }
 
         var auto = cfg.AutoHappening;
-        if (ImGui.Checkbox("Auto lanterns-lit when enough company inside", ref auto))
+        if (ImGui.Checkbox("Auto lanterns when the scan is enough", ref auto))
         {
             cfg.AutoHappening = auto;
             cfg.Save();
@@ -59,13 +59,13 @@ public sealed class ConfigWindow : Window
             ImGui.EndDisabled();
 
         var prompt = cfg.PromptOnEnter;
-        if (ImGui.Checkbox("Prompt when you walk onto a listed plot", ref prompt))
+        if (ImGui.Checkbox("Open Current plot when you walk onto an open listed venue", ref prompt))
         {
             cfg.PromptOnEnter = prompt;
             cfg.Save();
         }
 
-        ImGui.TextDisabled("Wrapped up always asks twice, needs a few minutes on the plot, and waits 20 minutes after you turn reports on. One report per layer per 20 minutes.");
+        ImGui.TextDisabled("Quiet is always a button. Lanterns may send themselves. One packed write per send.");
 
         var friends = cfg.ExcludeFriends;
         if (ImGui.Checkbox("Leave friends out of company", ref friends))

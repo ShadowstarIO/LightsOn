@@ -44,6 +44,8 @@ internal sealed class DirectoryClient
                 venue.Location.World ??= "";
                 venue.Location.District ??= "";
             }
+            venue.Description ??= [];
+            venue.Tags ??= [];
             venue.Occupancy ??= OccupancySnapshot.Unknown;
             venue.BindHours();
             cache.Add(venue);
