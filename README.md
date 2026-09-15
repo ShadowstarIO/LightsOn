@@ -26,7 +26,7 @@ A check can be sent from the yard or the room. They list separately. The room we
 
 Quiet is always a button. Lanterns may send themselves, then taper off as more people agree.
 
-Public occupancy: **60 minutes** lanterns, **45 minutes** quiet, cap 12. Log-book notes: **7 days**, cap 12, after about 8 minutes on the property.
+Public occupancy lasts while posted hours are on, **up to 4 hours**. Older reports fade (each hour divides their weight), so a fresh quiet can beat a stale busy. Log-book notes: **7 days**, cap 12, after about 8 minutes on the property.
 
 ## Log Book
 
@@ -34,7 +34,7 @@ Two lists, not free-form. Example: *Kind host*, *Warm music*. One note per perso
 
 ## Outdoors
 
-A second tab for short-range street scenes. After about 10 minutes in the same pocket it can note how lively it feels. Private gatherings can be kept off the list.
+A second tab for short-range street scenes. **Scan** and stay in the area (about a minute; busier scenes finish sooner), or wait about 10 minutes. Private gatherings can be kept off the list. The public list is about 20 minutes.
 
 ## Commands
 

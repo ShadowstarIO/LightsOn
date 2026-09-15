@@ -8,6 +8,7 @@ internal static class Reach
 {
     private static Dictionary<string, uint>? worldRegion;
     private static Dictionary<string, uint>? dcRegion;
+    private static Dictionary<string, string>? worldDc;
     private static uint myRegion;
     private static string myWorld = "";
 
@@ -31,6 +32,14 @@ internal static class Reach
                && region == myRegion;
     }
 
+    public static string DataCenterOf(string? world)
+    {
+        Ensure();
+        if (string.IsNullOrWhiteSpace(world) || worldDc is null)
+            return "";
+        return worldDc.TryGetValue(world.Trim(), out var dc) ? dc : "";
+    }
+
     private static void Ensure()
     {
         var current = NearbyWorld();
@@ -41,6 +50,7 @@ internal static class Reach
         myRegion = 0;
         var worlds = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
         var dcs = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         try
         {
             var sheet = Plugin.DataManager.GetExcelSheet<World>();
@@ -58,7 +68,10 @@ internal static class Reach
                 worlds[name] = region;
                 var dcName = dc.Value.Name.ToString();
                 if (dcName.Length > 0)
+                {
                     dcs[dcName] = region;
+                    names[name] = dcName;
+                }
                 if (string.Equals(name, current, StringComparison.OrdinalIgnoreCase))
                     myRegion = region;
             }
@@ -67,11 +80,13 @@ internal static class Reach
         {
             worldRegion = worlds;
             dcRegion = dcs;
+            worldDc = names;
             return;
         }
 
         worldRegion = worlds;
         dcRegion = dcs;
+        worldDc = names;
     }
 
     private static string NearbyWorld()

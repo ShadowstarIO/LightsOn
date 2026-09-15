@@ -13,6 +13,7 @@ internal static class UiTheme
     public static readonly Vector4 Wrapped = new(0.75f, 0.70f, 0.55f, 1f);
     public static readonly Vector4 Yellow = new(0.97f, 0.88f, 0.22f, 1f);
     public static readonly Vector4 Orange = new(0.96f, 0.42f, 0.12f, 1f);
+    public static readonly Vector4 Title = new(0.98f, 0.78f, 0.32f, 1f);
 
     public static void Section(string label, bool action = false)
         => ImGui.TextColored(action ? Amber : Teal, label);
@@ -25,6 +26,18 @@ internal static class UiTheme
         ImGui.TextDisabled("(i)");
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip(text);
+    }
+
+    public static Vector4 AgeColor(DateTimeOffset? at)
+    {
+        var mins = at is null ? 0 : Math.Max(0, (int)(DateTimeOffset.UtcNow - at.Value).TotalMinutes);
+        if (mins < 20)
+            return ImGui.GetStyle().Colors[(int)ImGuiCol.Text];
+        if (mins < 60)
+            return Mute;
+        if (mins < 120)
+            return Yellow;
+        return new Vector4(0.55f, 0.56f, 0.58f, 1f);
     }
 
     public static bool SearchCombo(string id, ref int current, string[] items, ref string filter)

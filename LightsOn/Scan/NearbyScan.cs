@@ -88,9 +88,51 @@ internal static class NearbyScan
         var pocket = $"{world}|{Plugin.ClientState.TerritoryType}|{gx}|{gz}";
         var tally = CountNearby(plugin, player, Limits.YardRangeYalms);
         var tier = TierName(tally.Patrons, tally.Score);
-        var summary = $"{place} · {tier}";
+        var (mx, my) = Here.WorldToMap(Plugin.ClientState.TerritoryType, pos.X, pos.Z);
+        var coords = mx > 0 && my > 0 ? $" ({mx:0.0}, {my:0.0})" : "";
+        var summary = $"{place}{coords} · {TierLabel(tier)}";
         return new OutdoorScan(pocket, world, place, tally.Patrons, tally.Score, tally.InCharacter, tally.Visible, tally.Familiar, tier, summary);
     }
+
+    public static bool TryParsePocket(string pocket, out string world, out uint territory, out int gx, out int gz)
+    {
+        world = "";
+        territory = 0;
+        gx = 0;
+        gz = 0;
+        var parts = (pocket ?? "").Split('|');
+        if (parts.Length != 4)
+            return false;
+        world = parts[0];
+        if (!uint.TryParse(parts[1], out territory))
+            return false;
+        if (!int.TryParse(parts[2], out gx) || !int.TryParse(parts[3], out gz))
+            return false;
+        return world.Length > 0 && territory > 0;
+    }
+
+    public static string PocketCoords(string pocket)
+    {
+        if (!TryParsePocket(pocket, out _, out var territory, out var gx, out var gz))
+            return "";
+        var (mx, my) = Here.WorldToMap(territory, (gx + 0.5f) * 20f, (gz + 0.5f) * 20f);
+        return mx > 0 && my > 0 ? $"({mx:0.0}, {my:0.0})" : "";
+    }
+
+    public static int TierRank(string? tier) => tier switch
+    {
+        "extremely_busy" => 3,
+        "some_activity" => 2,
+        "some_wandering" => 1,
+        _ => 0,
+    };
+
+    public static int LockMinutes(string? tier) => tier switch
+    {
+        "extremely_busy" => Limits.OutdoorLockBusyMinutes,
+        "some_activity" => Limits.OutdoorLockActivityMinutes,
+        _ => Limits.OutdoorLockWanderingMinutes,
+    };
 
     public static string TierName(int patrons, int score)
     {
@@ -103,11 +145,11 @@ internal static class NearbyScan
         return "";
     }
 
-    public static string TierLabel(string tier) => tier switch
+    public static string TierLabel(string? tier) => tier switch
     {
-        "extremely_busy" => "Extremely busy",
-        "some_activity" => "Some activity",
-        "some_wandering" => "Some wandering",
+        "extremely_busy" => "Extremely Busy",
+        "some_activity" => "Some Activity",
+        "some_wandering" => "Some Wandering",
         _ => "Quiet",
     };
 

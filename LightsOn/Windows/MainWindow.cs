@@ -17,9 +17,12 @@ public sealed class MainWindow : Window
     private string worldPick = "";
     private string dcFilter = "";
     private string worldFilter = "";
-    private int filter;
+    private int venueFilter;
+    private int outdoorFilter;
     private string? selectedId;
+    private string? selectedZone;
     private static readonly string[] StatusFilters = ["All", "Lanterns Lit", "Open Now", "Vacant", "No Data"];
+    private static readonly string[] OutdoorFilters = ["All", "Extremely Busy", "Some Activity", "Some Wandering"];
 
     public MainWindow(Plugin plugin)
         : base($"LightsOn {Plugin.Version}###LightsOnMain")
@@ -47,6 +50,10 @@ public sealed class MainWindow : Window
             }
             ImGui.Separator();
         }
+
+        ImGui.TextColored(UiTheme.Teal, plugin.Session.HereLine);
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Where you are. Star is people in range, not a zone census.");
 
         DrawPrivateAsk();
 
@@ -87,8 +94,6 @@ public sealed class MainWindow : Window
 
     private void DrawVenues()
     {
-        UiTheme.Section("Venues");
-        ImGui.SameLine();
         ImGui.TextDisabled(plugin.StatusLine);
         ImGui.SameLine();
         if (ImGui.SmallButton("Refresh"))
@@ -103,55 +108,10 @@ public sealed class MainWindow : Window
         if (ImGui.SmallButton("Settings"))
             plugin.ToggleConfigUi();
 
-        var showOther = plugin.Configuration.ShowOtherRegions;
-        var dcs = plugin.Venues
-            .Select(v => v.Location?.DataCenter ?? "")
-            .Where(s => s.Length > 0)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Where(s => showOther || Reach.CanVisitDc(s))
-            .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        var worlds = plugin.Venues
-            .Where(v => dcPick.Length == 0
-                        || string.Equals(v.Location?.DataCenter, dcPick, StringComparison.OrdinalIgnoreCase))
-            .Select(v => v.Location?.World ?? "")
-            .Where(s => s.Length > 0)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Where(s => showOther || Reach.CanVisitWorld(s))
-            .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-        if (worldPick.Length > 0 && !worlds.Contains(worldPick, StringComparer.OrdinalIgnoreCase))
-            worldPick = "";
-
-        ImGui.SetNextItemWidth(180);
-        ImGui.InputTextWithHint("##q", "Search Name", ref query, 80);
-        ImGui.SameLine();
-        ImGui.SetNextItemWidth(150);
-        PlaceCombo("##dc", dcPick.Length == 0 ? "All Data Centers" : dcPick, dcs, "All Data Centers", ref dcFilter, ref dcPick);
-        ImGui.SameLine();
-        ImGui.SetNextItemWidth(150);
-        PlaceCombo("##world", worldPick.Length == 0 ? "All Worlds" : worldPick, worlds, "All Worlds", ref worldFilter, ref worldPick);
-        if (worldPick.Length > 0 && dcPick.Length == 0)
-        {
-            var dc = plugin.Venues.FirstOrDefault(v =>
-                string.Equals(v.Location?.World, worldPick, StringComparison.OrdinalIgnoreCase))?.Location?.DataCenter;
-            if (!string.IsNullOrEmpty(dc))
-                dcPick = dc;
-        }
-        ImGui.SameLine();
-        ImGui.SetNextItemWidth(130);
-        ImGui.Combo("##status", ref filter, StatusFilters, StatusFilters.Length);
-        ImGui.SameLine();
-        if (ImGui.Checkbox("Other Regions", ref showOther))
-        {
-            plugin.Configuration.ShowOtherRegions = showOther;
-            plugin.Configuration.Save();
-        }
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Worlds you cannot visit from this character. Off by default.");
+        DrawPlaceFilters(true);
 
         var rows = plugin.Venues
-            .Where(Matches)
+            .Where(MatchesVenue)
             .OrderBy(v => Reach.CanVisitWorld(v.Location?.World) ? 0 : 1)
             .ThenByDescending(v => v.Resolution?.IsNow == true)
             .ThenBy(v => v.Name ?? "", StringComparer.OrdinalIgnoreCase)
@@ -212,56 +172,219 @@ public sealed class MainWindow : Window
 
     private void DrawOutdoors()
     {
-        UiTheme.Section("Outdoors");
+        DrawOutdoorScanBar();
+        DrawPlaceFilters(false);
+
+        var rows = plugin.Outdoors
+            .Where(MatchesOutdoor)
+            .ToList();
+        var zones = rows
+            .GroupBy(o => ZoneKey(o))
+            .Select(g => new OutdoorZone(
+                g.Key,
+                g.Max(o => NearbyScan.TierRank(o.Tier)),
+                g.Count(),
+                g.Max(o => o.UpdatedAt ?? DateTimeOffset.MinValue),
+                g.OrderByDescending(o => NearbyScan.TierRank(o.Tier)).ThenByDescending(o => o.UpdatedAt).ToList()))
+            .OrderByDescending(z => z.Rank)
+            .ThenByDescending(z => z.UpdatedAt)
+            .ToList();
+
+        if (selectedZone is not null && zones.All(z => z.Key != selectedZone))
+            selectedZone = null;
+        selectedZone ??= zones.FirstOrDefault()?.Key;
+        var picked = zones.FirstOrDefault(z => z.Key == selectedZone);
+
+        var listW = Math.Max(260, ImGui.GetContentRegionAvail().X * 0.42f);
+        ImGui.BeginChild("oz-list", new Vector2(listW, -1), true);
+        if (zones.Count == 0)
+            ImGui.TextDisabled($"No outdoor scenes noted in the last {Limits.OutdoorListMinutes} minutes.");
+        foreach (var zone in zones)
+        {
+            var top = zone.Pockets[0];
+            ImGui.TextColored(UiTheme.Happening, "·");
+            ImGui.SameLine(0, 6);
+            if (ImGui.Selectable($"{zone.Key}##{zone.Key}", zone.Key == selectedZone))
+                selectedZone = zone.Key;
+            ImGui.SameLine();
+            ImGui.TextColored(UiTheme.Happening, NearbyScan.TierLabel(top.Tier));
+            ImGui.TextDisabled($"{zone.Count} spot{(zone.Count == 1 ? "" : "s")} · {VenueView.Age(zone.UpdatedAt)}");
+        }
+        ImGui.EndChild();
+
+        ImGui.SameLine();
+        ImGui.BeginChild("oz-detail", new Vector2(0, -1), true);
+        if (picked is null)
+            ImGui.TextDisabled("Pick a zone.");
+        else
+        {
+            ImGui.TextColored(UiTheme.Title, picked.Key);
+            ImGui.TextDisabled(Copy.OutdoorsHint);
+            foreach (var row in picked.Pockets)
+            {
+                UiTheme.Gap();
+                ImGui.Separator();
+                var here = string.Equals(row.Pocket, plugin.Session.PocketKey, StringComparison.Ordinal);
+                ImGui.TextColored(UiTheme.Happening, NearbyScan.TierLabel(row.Tier));
+                ImGui.SameLine();
+                var coords = NearbyScan.PocketCoords(row.Pocket);
+                ImGui.TextWrapped(string.IsNullOrEmpty(coords) ? row.Place : $"{row.Place} {coords}");
+                if (here)
+                {
+                    ImGui.SameLine();
+                    ImGui.TextColored(UiTheme.Amber, "here");
+                }
+                if (row.InCharacter)
+                {
+                    ImGui.SameLine();
+                    ImGui.TextColored(UiTheme.Teal, "IC");
+                }
+                ImGui.TextColored(UiTheme.AgeColor(row.UpdatedAt),
+                    $"{row.Reports} note{(row.Reports == 1 ? "" : "s")} · {VenueView.Age(row.UpdatedAt)}");
+                if (ImGui.SmallButton($"Flag##{row.Pocket}"))
+                    Here.FlagPocket(row.Pocket);
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip("Place a map flag on this pocket. Coarse cell, not a person's feet.");
+            }
+        }
+        ImGui.EndChild();
+    }
+
+    private void DrawOutdoorScanBar()
+    {
+        var onPlot = plugin.Session.PlotKey.Length > 0;
+        var watching = plugin.Session.Watching;
+        var ready = plugin.Session.WatchReady;
+        var canNote = plugin.Configuration.NoteOutdoorScenes && plugin.CanSend;
+
+        if (watching)
+        {
+            if (ImGui.SmallButton("Cancel"))
+                plugin.CancelOutdoorWatch();
+        }
+        else
+        {
+            var blocked = onPlot;
+            if (blocked)
+                ImGui.BeginDisabled();
+            if (ImGui.SmallButton("Scan"))
+                plugin.StartOutdoorWatch();
+            if (blocked)
+                ImGui.EndDisabled();
+            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            {
+                ImGui.SetTooltip(onPlot
+                    ? "Outdoor notes are for the street, not plots."
+                    : "Stay in this area. About a minute; busier scenes finish sooner.");
+            }
+        }
+        ImGui.SameLine();
+        if (ImGui.SmallButton("Refresh"))
+            _ = plugin.RefreshOutdoors();
         ImGui.SameLine();
         if (ImGui.SmallButton("Settings"))
             plugin.ToggleConfigUi();
-        ImGui.TextWrapped(Copy.OutdoorsHint);
+
         if (!plugin.Configuration.NoteOutdoorScenes)
-            ImGui.TextDisabled("Settings → Note outdoor scenes to contribute. You can still read the list.");
+            ImGui.TextDisabled("Settings → Note Outdoor Scenes to contribute. You can still read the list.");
 
-        var rows = plugin.Outdoors
-            .OrderBy(o => TierRank(o.Tier))
-            .ThenByDescending(o => o.UpdatedAt)
-            .ToList();
-        if (rows.Count == 0)
+        if (watching)
         {
-            ImGui.TextDisabled("No outdoor scenes noted in the last 20 minutes.");
-            return;
-        }
-
-        string? world = null;
-        foreach (var row in rows)
-        {
-            if (world != row.World)
+            ImGui.TextWrapped(plugin.Session.WatchLine);
+            if (ready)
             {
-                world = row.World;
-                UiTheme.Section(world, true);
-            }
-            ImGui.TextColored(UiTheme.Happening, NearbyScan.TierLabel(row.Tier));
-            ImGui.SameLine();
-            ImGui.TextWrapped(row.Place);
-            if (row.InCharacter)
-            {
+                var peak = plugin.Session.WatchPeak;
+                var wait = plugin.Session.OutdoorWait(peak.Pocket, peak.Tier);
+                var noteOk = canNote && peak.Tier.Length > 0 && wait <= TimeSpan.Zero;
+                if (!noteOk)
+                    ImGui.BeginDisabled();
+                var label = wait > TimeSpan.Zero
+                    ? $"Note ({Math.Max(1, (int)Math.Ceiling(wait.TotalSeconds))}s)"
+                    : "Note";
+                if (ImGui.SmallButton(label))
+                    _ = plugin.FinishOutdoorWatch();
+                if (!noteOk)
+                    ImGui.EndDisabled();
                 ImGui.SameLine();
-                ImGui.TextColored(UiTheme.Teal, "in character");
+                if (ImGui.SmallButton("Skip"))
+                    plugin.CancelOutdoorWatch();
             }
-            ImGui.TextDisabled($"{row.Reports} note{(row.Reports == 1 ? "" : "s")} · {Age(row.UpdatedAt)}");
         }
+        else if (plugin.Session.OutdoorLine.Length > 0)
+            ImGui.TextWrapped(plugin.Session.OutdoorLine);
     }
 
-    private bool Matches(VenueListing venue)
+    private void DrawPlaceFilters(bool venues)
+    {
+        var showOther = plugin.Configuration.ShowOtherRegions;
+        var dcs = plugin.Venues
+            .Select(v => v.Location?.DataCenter ?? "")
+            .Concat(plugin.Outdoors.Select(o => Reach.DataCenterOf(o.World)))
+            .Where(s => s.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(s => showOther || Reach.CanVisitDc(s))
+            .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        var worlds = plugin.Venues
+            .Select(v => new { Dc = v.Location?.DataCenter ?? "", World = v.Location?.World ?? "" })
+            .Concat(plugin.Outdoors.Select(o => new { Dc = Reach.DataCenterOf(o.World), World = o.World }))
+            .Where(x => x.World.Length > 0)
+            .Where(x => dcPick.Length == 0 || string.Equals(x.Dc, dcPick, StringComparison.OrdinalIgnoreCase))
+            .Select(x => x.World)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(s => showOther || Reach.CanVisitWorld(s))
+            .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (worldPick.Length > 0 && !worlds.Contains(worldPick, StringComparer.OrdinalIgnoreCase))
+            worldPick = "";
+
+        ImGui.SetNextItemWidth(180);
+        ImGui.InputTextWithHint("##q", venues ? "Search Name" : "Search Place", ref query, 80);
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(150);
+        PlaceCombo("##dc", dcPick.Length == 0 ? "All Data Centers" : dcPick, dcs, "All Data Centers", ref dcFilter, ref dcPick);
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(150);
+        PlaceCombo("##world", worldPick.Length == 0 ? "All Worlds" : worldPick, worlds, "All Worlds", ref worldFilter, ref worldPick);
+        if (worldPick.Length > 0 && dcPick.Length == 0)
+        {
+            var dc = Reach.DataCenterOf(worldPick);
+            if (string.IsNullOrEmpty(dc))
+            {
+                dc = plugin.Venues.FirstOrDefault(v =>
+                    string.Equals(v.Location?.World, worldPick, StringComparison.OrdinalIgnoreCase))?.Location?.DataCenter;
+            }
+            if (!string.IsNullOrEmpty(dc))
+                dcPick = dc;
+        }
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(130);
+        if (venues)
+            ImGui.Combo("##status", ref venueFilter, StatusFilters, StatusFilters.Length);
+        else
+            ImGui.Combo("##ostatus", ref outdoorFilter, OutdoorFilters, OutdoorFilters.Length);
+        ImGui.SameLine();
+        if (ImGui.Checkbox("Other Regions", ref showOther))
+        {
+            plugin.Configuration.ShowOtherRegions = showOther;
+            plugin.Configuration.Save();
+        }
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Worlds you cannot visit from this character. Off by default.");
+    }
+
+    private bool MatchesVenue(VenueListing venue)
     {
         if (venue is null)
             return false;
         var occ = venue.Occupancy ?? OccupancySnapshot.Unknown;
-        if (filter == 1 && !occ.IsHappening)
+        if (venueFilter == 1 && !occ.IsHappening)
             return false;
-        if (filter == 2 && venue.Resolution?.IsNow != true)
+        if (venueFilter == 2 && venue.Resolution?.IsNow != true)
             return false;
-        if (filter == 3 && !occ.IsWrappedUp)
+        if (venueFilter == 3 && !occ.IsWrappedUp)
             return false;
-        if (filter == 4 && occ.State is not "unknown" and not "")
+        if (venueFilter == 4 && occ.State is not "unknown" and not "")
             return false;
         if (!plugin.Configuration.ShowOtherRegions
             && !Reach.CanVisitWorld(venue.Location?.World))
@@ -280,6 +403,30 @@ public sealed class MainWindow : Window
                || (loc?.DataCenter ?? "").Contains(query, StringComparison.OrdinalIgnoreCase)
                || (loc?.District ?? "").Contains(query, StringComparison.OrdinalIgnoreCase);
     }
+
+    private bool MatchesOutdoor(OutdoorSnapshot row)
+    {
+        if (!plugin.Configuration.ShowOtherRegions && !Reach.CanVisitWorld(row.World))
+            return false;
+        if (worldPick.Length > 0
+            && !string.Equals(row.World, worldPick, StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (dcPick.Length > 0
+            && !string.Equals(Reach.DataCenterOf(row.World), dcPick, StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (outdoorFilter == 1 && row.Tier != "extremely_busy")
+            return false;
+        if (outdoorFilter == 2 && row.Tier != "some_activity")
+            return false;
+        if (outdoorFilter == 3 && row.Tier != "some_wandering")
+            return false;
+        if (string.IsNullOrEmpty(query))
+            return true;
+        return row.Place.Contains(query, StringComparison.OrdinalIgnoreCase)
+               || row.World.Contains(query, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string ZoneKey(OutdoorSnapshot row) => $"{row.World} · {row.Place}";
 
     private static void PlaceCombo(string id, string preview, List<string> items, string allLabel, ref string filter, ref string picked)
     {
@@ -300,23 +447,10 @@ public sealed class MainWindow : Window
         ImGui.EndCombo();
     }
 
-    private static int TierRank(string tier) => tier switch
-    {
-        "extremely_busy" => 0,
-        "some_activity" => 1,
-        "some_wandering" => 2,
-        _ => 3,
-    };
-
-    private static string Age(DateTimeOffset? at)
-    {
-        if (at is null)
-            return "unknown age";
-        var mins = Math.Max(0, (int)(DateTimeOffset.UtcNow - at.Value).TotalMinutes);
-        if (mins < 1)
-            return "just now";
-        if (mins < 60)
-            return $"{mins}m ago";
-        return $"{mins / 60}h ago";
-    }
+    private readonly record struct OutdoorZone(
+        string Key,
+        int Rank,
+        int Count,
+        DateTimeOffset UpdatedAt,
+        List<OutdoorSnapshot> Pockets);
 }

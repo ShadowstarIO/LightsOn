@@ -6,8 +6,8 @@ Copy sits between OOC and IC.
 
 | In LightsOn | Meaning |
 | --- | --- |
-| **Lanterns Lit** | Enough company on that layer, last ~60 minutes |
-| **Quiet Halls / Yard Quiet** | Hours said open; that layer looks empty, last ~45 minutes |
+| **Lanterns Lit** | Enough company on that layer. Counts while posted hours are on, up to 4 hours. Older reports fade. |
+| **Quiet Halls / Yard Quiet** | Hours said open; that layer looks empty. Same window; a fresh quiet outweighs a stale busy. |
 | **open?** | Hours on, no occupancy yet |
 | **open!** | Lean toward company |
 | **open~** | Split |
@@ -30,6 +30,8 @@ Yard and inside list separately. The room weighs more. Ward + Plot is the proper
 | **Voices** | say with a patron here | +1 total, off unless enabled |
 
 **Enough company** = score 3 on that layer. Friends and Free Company can be left out. Chat text is never uploaded.
+
+A report’s occupancy weight is **1 / hours old** (full for the first hour, a third at three hours). The room still counts double. Hours off: reports drop.
 
 ## Log Book
 

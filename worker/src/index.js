@@ -1,13 +1,14 @@
-const WINDOW_MS = 60 * 60 * 1000;
-const QUIET_MS = 45 * 60 * 1000;
+const WINDOW_MS = 4 * 60 * 60 * 1000;
 const RATE_MS = 45 * 1000;
-const HISTORY_MS = 14 * 24 * 60 * 60 * 1000;
 const NOTE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const NOTE_RATE_MS = 24 * 60 * 60 * 1000;
+const OUTDOOR_MS = 20 * 60 * 1000;
 const MAX_BODY = 8 * 1024;
 const VENUES_URL = "https://api.ffxivvenues.com/venue";
-const UA = "LightsOn/0.0.4.0 (+https://github.com/XozaShadow/LightsOn)";
+const UA = "LightsOn/0.0.4.1 (+https://github.com/XozaShadow/LightsOn)";
 const TIER_RANK = { extremely_busy: 3, some_activity: 2, some_wandering: 1 };
+const OUTDOOR_LOCK_MS = { extremely_busy: 3 * 60 * 1000, some_activity: 8 * 60 * 1000, some_wandering: 20 * 60 * 1000 };
+const OUTDOOR_UPGRADE_MS = 3 * 60 * 1000;
 const venueCache = new Map();
 let migrateTried = false;
 
@@ -26,7 +27,7 @@ export default {
     try {
       const url = new URL(request.url);
       if (request.method === "GET" && url.pathname === "/")
-        return json({ name: "LightsOn", windowMinutes: 60, quietMinutes: 45, occupancy: "/v1/occupancy" });
+        return json({ name: "LightsOn", windowMinutes: 240, occupancyHours: 4, occupancy: "/v1/occupancy" });
       if (request.method === "GET" && url.pathname === "/v1/health")
         return json(await health(env));
       if (request.method === "GET" && url.pathname === "/v1/occupancy")
@@ -59,11 +60,12 @@ export default {
   async scheduled(_event, env) {
     await migrate(env);
     await pruneClosed(env);
-    const cutoff = new Date(Date.now() - HISTORY_MS).toISOString();
+    const cutoff = new Date(Date.now() - WINDOW_MS).toISOString();
     await env.DB.prepare("DELETE FROM reports WHERE at < ?").bind(cutoff).run();
     await env.DB.prepare("DELETE FROM notes WHERE expires_at < ?").bind(new Date().toISOString()).run();
-    await env.DB.prepare("DELETE FROM outdoors WHERE at < ?").bind(cutoff).run();
-    await env.DB.prepare("DELETE FROM outdoor_votes WHERE at < ?").bind(cutoff).run();
+    const outdoorCutoff = new Date(Date.now() - OUTDOOR_MS).toISOString();
+    await env.DB.prepare("DELETE FROM outdoors WHERE at < ?").bind(outdoorCutoff).run();
+    await env.DB.prepare("DELETE FROM outdoor_votes WHERE at < ?").bind(outdoorCutoff).run();
   },
 };
 
@@ -124,48 +126,85 @@ function ingestOk(request, env) {
 async function health(env) {
   const since = new Date(Date.now() - WINDOW_MS).toISOString();
   const reports = await env.DB.prepare("SELECT COUNT(*) AS n FROM reports WHERE at >= ?").bind(since).first();
-  return { ok: true, reports: reports?.n ?? 0, windowMinutes: 60, quietMinutes: 45 };
+  return { ok: true, reports: reports?.n ?? 0, windowMinutes: 240, occupancyHours: 4 };
 }
 
 async function getOccupancy(env, params) {
   void params;
-  const happeningSince = new Date(Date.now() - WINDOW_MS).toISOString();
-  const quietSince = new Date(Date.now() - QUIET_MS).toISOString();
-  const { results } = await env.DB.prepare(
-    `SELECT venue_id AS venueId,
-            COUNT(DISTINCT CASE WHEN kind = 'happening' AND at >= ? THEN reporter_id END) AS happeningReports,
-            COUNT(DISTINCT CASE WHEN kind = 'wrapped_up' AND at >= ? THEN reporter_id END) AS wrappedUpReports,
-            COUNT(DISTINCT CASE WHEN kind = 'happening' AND inside = 1 AND at >= ? THEN reporter_id END) AS interiorHappening,
-            COUNT(DISTINCT CASE WHEN kind = 'wrapped_up' AND inside = 1 AND at >= ? THEN reporter_id END) AS interiorWrapped,
-            COUNT(DISTINCT CASE WHEN kind = 'happening' AND inside = 0 AND at >= ? THEN reporter_id END) AS exteriorHappening,
-            COUNT(DISTINCT CASE WHEN kind = 'wrapped_up' AND inside = 0 AND at >= ? THEN reporter_id END) AS exteriorWrapped,
-            MAX(CASE WHEN at >= ? THEN door_locked ELSE 0 END) AS doorLocked,
-            MAX(at) AS updatedAt
-     FROM reports
-     WHERE at >= ?
-     GROUP BY venue_id
-     ORDER BY MAX(at) DESC
-     LIMIT 200`,
-  ).bind(
-    happeningSince, quietSince,
-    happeningSince, quietSince,
-    happeningSince, quietSince,
-    happeningSince, happeningSince,
-  ).all();
-  return (results ?? []).map((row) => occupancyFromAgg(row))
-    .filter((row) => row.happeningReports + row.wrappedUpReports > 0);
+  const since = new Date(Date.now() - WINDOW_MS).toISOString();
+  let results;
+  try {
+    ({ results } = await env.DB.prepare(
+      `SELECT venue_id AS venueId, kind, reporter_id AS reporterId, at, inside,
+              door_locked AS doorLocked
+       FROM reports WHERE at >= ? ORDER BY at DESC LIMIT 4000`,
+    ).bind(since).all());
+  } catch {
+    ({ results } = await env.DB.prepare(
+      `SELECT venue_id AS venueId, kind, reporter_id AS reporterId, at, inside
+       FROM reports WHERE at >= ? ORDER BY at DESC LIMIT 4000`,
+    ).bind(since).all());
+  }
+  const byVenue = new Map();
+  for (const row of results ?? []) {
+    if (!byVenue.has(row.venueId))
+      byVenue.set(row.venueId, []);
+    byVenue.get(row.venueId).push(row);
+  }
+  const out = [];
+  for (const [venueId, rows] of byVenue) {
+    const venue = await lookupVenue(venueId);
+    if (venue && !venue.open_now)
+      continue;
+    const snap = occupancyFromReports(venueId, rows);
+    if (snap.happeningReports + snap.wrappedUpReports > 0)
+      out.push(snap);
+  }
+  return out;
 }
 
-function occupancyFromAgg(row) {
-  const happening = Number(row.happeningReports || 0);
-  const wrapped = Number(row.wrappedUpReports || 0);
-  const intH = Number(row.interiorHappening || 0);
-  const intW = Number(row.interiorWrapped || 0);
-  const extH = Number(row.exteriorHappening || 0);
-  const extW = Number(row.exteriorWrapped || 0);
+function reportWeight(at) {
+  const hours = Math.max(0, (Date.now() - new Date(at).getTime()) / 3600000);
+  return 1 / Math.max(1, hours);
+}
+
+function occupancyFromReports(venueId, rows) {
+  const latest = new Map();
+  for (const row of rows) {
+    const key = `${row.reporterId}|${Number(row.inside) === 1 ? 1 : 0}`;
+    if (!latest.has(key))
+      latest.set(key, row);
+  }
+  let happening = 0;
+  let wrapped = 0;
+  let intH = 0;
+  let intW = 0;
+  let extH = 0;
+  let extW = 0;
+  let lean = 0;
+  let door = 0;
+  let updated = "";
+  for (const row of latest.values()) {
+    const inside = Number(row.inside) === 1;
+    const up = row.kind === "happening";
+    const w = reportWeight(row.at);
+    lean += w * (inside ? 2 : 1) * (up ? 1 : -1);
+    if (up) {
+      happening++;
+      if (inside) intH++;
+      else extH++;
+    } else {
+      wrapped++;
+      if (inside) intW++;
+      else extW++;
+    }
+    if (Number(row.doorLocked) === 1)
+      door = 1;
+    if (!updated || row.at > updated)
+      updated = row.at;
+  }
   const interior = intH + intW > 0;
   const exterior = extH + extW > 0;
-  const lean = intH * 2 + extH - intW * 2 - extW;
   let state = "unknown";
   if (happening === 0 && wrapped === 0)
     state = "unknown";
@@ -175,9 +214,8 @@ function occupancyFromAgg(row) {
     state = "wrapped_up";
   else
     state = "mixed";
-  const updated = row.updatedAt || new Date().toISOString();
   return {
-    venueId: row.venueId,
+    venueId,
     state,
     happeningReports: happening,
     wrappedUpReports: wrapped,
@@ -185,10 +223,11 @@ function occupancyFromAgg(row) {
     interiorWrapped: intW,
     exteriorHappening: extH,
     exteriorWrapped: extW,
-    doorLocked: Number(row.doorLocked) === 1,
+    doorLocked: door === 1,
     bothLayers: interior && exterior,
-    updatedAt: updated,
-    expiresAt: new Date(new Date(updated).getTime() + WINDOW_MS).toISOString(),
+    updatedAt: updated || new Date().toISOString(),
+    expiresAt: new Date(Date.now() + WINDOW_MS).toISOString(),
+    lean: Math.round(lean * 100) / 100,
   };
 }
 
@@ -374,7 +413,7 @@ async function postNote(env, request) {
 }
 
 async function getOutdoors(env) {
-  const since = new Date(Date.now() - WINDOW_MS).toISOString();
+  const since = new Date(Date.now() - OUTDOOR_MS).toISOString();
   const { results } = await env.DB.prepare(
     `SELECT pocket, world, place,
             MAX(CASE tier
@@ -441,12 +480,17 @@ async function postOutdoor(env, request) {
     return json({ error: "world and place required" }, 400);
 
   const now = new Date();
-  const since = new Date(now.getTime() - RATE_MS).toISOString();
-  const recent = await env.DB.prepare(
-    "SELECT id FROM outdoors WHERE reporter_id = ? AND pocket = ? AND at >= ? LIMIT 1",
-  ).bind(body.reporterId, body.pocket, since).first();
-  if (recent)
-    return json({ error: "already noted this pocket recently" }, 429);
+  const last = await env.DB.prepare(
+    "SELECT tier, at FROM outdoors WHERE reporter_id = ? AND pocket = ? ORDER BY at DESC LIMIT 1",
+  ).bind(body.reporterId, body.pocket).first();
+  if (last) {
+    const age = now.getTime() - new Date(last.at).getTime();
+    const lastRank = TIER_RANK[last.tier] || 0;
+    const nextRank = TIER_RANK[tier] || 0;
+    const need = nextRank > lastRank ? OUTDOOR_UPGRADE_MS : (OUTDOOR_LOCK_MS[last.tier] || OUTDOOR_MS);
+    if (age < Math.max(RATE_MS, need))
+      return json({ error: "already noted this pocket recently" }, 429);
+  }
 
   await env.DB.prepare(
     "INSERT INTO outdoors (pocket, world, place, tier, in_character, reporter_id, at) VALUES (?, ?, ?, ?, ?, ?, ?)",

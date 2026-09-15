@@ -23,20 +23,25 @@ internal static class VenueView
         var onPlot = NearbyScan.MatchesVenue(venue);
         var here = HousingReader.Read();
 
-        ImGui.TextWrapped(venue.Name ?? "");
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextColored(UiTheme.Title, venue.Name ?? "");
+        ImGui.SameLine();
+        if (ImGui.SmallButton("Refresh"))
+            _ = plugin.RefreshVenue(venue);
+        ImGui.SameLine();
         if (currentPlot)
         {
-            ImGui.SameLine();
-            if (ImGui.SmallButton("Refresh"))
-                _ = plugin.RefreshVenue(venue);
+            if (ImGui.SmallButton("Full"))
+                plugin.ShowFull(venue.Id);
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("Open the full LightsOn window for this listing.");
         }
         else
         {
-            ImGui.SameLine();
-            if (ImGui.SmallButton("Pop Out"))
-                plugin.TogglePlotWindow();
+            if (ImGui.SmallButton("Mini"))
+                plugin.ShowMini();
             if (ImGui.IsItemHovered())
-                ImGui.SetTooltip(plugin.PlotUiOpen ? "Close the plot window." : "Open the plot window.");
+                ImGui.SetTooltip("Open the small Current Plot window.");
         }
 
         var lean = Lean(occ);
@@ -45,7 +50,7 @@ internal static class VenueView
         ImGui.TextDisabled(venue.HoursLine);
 
         if (onPlot)
-            ImGui.TextWrapped($"On This Plot · {(here.Inside ? "inside" : "outside")} · {loc?.Address ?? here.Summary}");
+            ImGui.TextWrapped($"On This Plot · {(here.Inside ? "inside" : "yard")} · {loc?.Address ?? here.Summary}");
         else
         {
             ImGui.TextWrapped(loc?.Address ?? "");
@@ -192,7 +197,7 @@ internal static class VenueView
         if (exterior.Count == 0)
             ImGui.TextDisabled("None yet.");
         foreach (var row in exterior)
-            ImGui.TextWrapped(EventLine(row));
+            ImGui.TextColored(UiTheme.AgeColor(row.At), EventLine(row));
 
         UiTheme.Gap();
         ImGui.Separator();
@@ -201,7 +206,7 @@ internal static class VenueView
         if (interior.Count == 0)
             ImGui.TextDisabled(locked ? "Locked. No interior reports yet." : "None yet.");
         foreach (var row in interior)
-            ImGui.TextWrapped(EventLine(row));
+            ImGui.TextColored(UiTheme.AgeColor(row.At), EventLine(row));
     }
 
     private static void DrawLogBook(Plugin plugin, VenueListing venue, bool onPlot)
@@ -247,7 +252,7 @@ internal static class VenueView
         if (venue.Notes.Count == 0)
             ImGui.TextDisabled("No notes yet.");
         foreach (var note in venue.Notes.Take(12))
-            ImGui.TextWrapped($"{Age(note.At)}: \"{note.Text}\"");
+            ImGui.TextColored(UiTheme.AgeColor(note.At), $"{Age(note.At)}: \"{note.Text}\"");
     }
 
     private static string FmtWait(TimeSpan wait)
@@ -270,16 +275,14 @@ internal static class VenueView
         var lean = Lean(occ);
         if (lean > 0)
             return ("open!", UiTheme.Happening);
-        if (lean == 0)
+        if (Math.Abs(lean) < 0.05f)
             return ("open~", UiTheme.Amber);
         return ("\"open\"", UiTheme.Orange);
     }
 
-    public static int Lean(OccupancySnapshot occ) =>
-        occ.InteriorHappening * 2 + occ.ExteriorHappening
-        - occ.InteriorWrapped * 2 - occ.ExteriorWrapped;
+    public static float Lean(OccupancySnapshot occ) => occ.LeanValue;
 
-    private static string SummaryStatus(OccupancySnapshot occ, IReadOnlyList<OccupancyEvent> log, int lean)
+    private static string SummaryStatus(OccupancySnapshot occ, IReadOnlyList<OccupancyEvent> log, float lean)
     {
         var head = lean > 0 ? Copy.Happening : lean < 0 ? Copy.Wrapped : occ.HappeningReports + occ.WrappedUpReports == 0 ? Copy.NoReport : "Split";
         var bits = new List<string> { head };
@@ -349,6 +352,9 @@ internal static class VenueView
             return "just now";
         if (mins < 60)
             return $"{mins}m ago";
-        return $"{mins / 60}h ago";
+        var hours = mins / 60.0;
+        if (hours < 2)
+            return "1h ago";
+        return $"{(int)hours}h ago";
     }
 }

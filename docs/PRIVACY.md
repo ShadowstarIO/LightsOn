@@ -30,7 +30,7 @@ Listings are fetched from the public community venue directory ([FFXIV Venues](h
 
 - Other people’s names, Content IDs, or account IDs
 - Your character name or Content ID
-- Exact coordinates (outdoor pockets are a coarse cell)
+- Exact coordinates (outdoor pockets are a coarse cell; the map flag is that cell, computed on your client)
 - Unlisted houses
 - Chat logs
 

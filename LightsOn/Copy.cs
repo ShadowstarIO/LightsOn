@@ -16,7 +16,7 @@ internal static class Copy
     public const string DoorLocked = "Locked";
     public const string DirectoryUrl = "https://ffxivvenues.com/";
     public const string OutdoorsHint =
-        "Short-range outdoor pockets. After about 10 minutes in the same pocket, LightsOn can note how lively it feels.";
+        "Short-range street pockets. Scan and stay in the area, or wait about 10 minutes. Busier scenes note sooner.";
 
     public const string Welcome =
         "Tired of walking in on posted hours and an empty room? LightsOn is occupancy for listed venues: lanterns lit when there is enough company, quiet when the yard or halls look empty. Reports are optional, on the plot, and never include names or counts.";
