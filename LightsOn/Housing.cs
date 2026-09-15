@@ -15,7 +15,7 @@ public readonly record struct HousingAddress(
     public bool OnPlot => Ward is >= 1 and <= 30 && Plot is >= 1 and <= 60;
 
     public string Summary => OnPlot
-        ? $"{District}  W{Ward}{(Subdivision ? " sub" : "")}  P{Plot}" + (Apartment > 0 ? $"  R{Apartment}" : "") + (Inside ? "  inside" : "  yard")
+        ? $"{District}  W{Ward}  P{Plot}" + (Apartment > 0 ? $"{(Subdivision ? " sub" : "")} R{Apartment}" : "") + (Inside ? "  inside" : "  yard")
         : "not on a plot";
 }
 
@@ -70,7 +70,7 @@ internal static class HousingReader
         if (ward is < 1 or > 30)
             return default;
 
-        var subdivision = division == 2 || plot is >= 31 and <= 60;
+        var subdivision = division == 2;
         if (plot is < 1 or > 60)
             return new HousingAddress(inside, district, ward, 0, room, subdivision);
 
@@ -122,4 +122,26 @@ internal static class HousingReader
 
     private static bool Contains(string hay, string needle) =>
         hay.Contains(needle, StringComparison.OrdinalIgnoreCase);
+
+    public static bool DoorIsLocked()
+    {
+        try
+        {
+            unsafe
+            {
+                var h = HousingManager.Instance();
+                if (h == null || h->OutdoorTerritory == null)
+                    return false;
+                var plot = h->GetCurrentPlot();
+                if (plot is < 0 or >= 60)
+                    return false;
+                return !h->OutdoorTerritory->Plots[plot].IsOpen;
+            }
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Verbose(ex, "Plot open flag failed");
+            return false;
+        }
+    }
 }

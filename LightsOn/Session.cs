@@ -14,7 +14,7 @@ public sealed class Session
     public VenueListing? Hop { get; set; }
     public bool HopDismissed { get; set; }
     public string? WrapSureVenue { get; set; }
-    public DateTimeOffset LastAutoHappening { get; set; }
+    public string LastAutoChips { get; set; } = "";
     public string LastAutoVenue { get; set; } = "";
     public bool LastAutoInside { get; set; }
     public DateTimeOffset LastOutdoorPost { get; set; }
@@ -70,6 +70,7 @@ public sealed class Session
         HopDismissed = false;
         WrapSureVenue = null;
         ObserveSince = key.Length == 0 ? default : DateTimeOffset.UtcNow;
+        LastAutoChips = "";
         Check.Clear();
         HeardNames.Clear();
         SelfSpoke = false;

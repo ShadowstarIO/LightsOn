@@ -2,7 +2,7 @@
 
 v1. HTTPS hostname required. No IPs.
 
-Public window: **20 minutes**. Reporter ids never leave the worker. One player send is one `INSERT`. Occupancy is derived on GET. About 30 POSTs/minute per isolate; plugin timers (~45s per action) should rarely hit that.
+Public window: **60 minutes** for lanterns, **45 minutes** for quiet. Cap 12 rows per listing. Reporter ids never leave the worker. One player send is one `INSERT`. Occupancy is derived on GET. About 30 POSTs/minute per isolate; plugin timers (~45s per action) should rarely hit that.
 
 ## `GET /v1/occupancy`
 
@@ -10,7 +10,7 @@ Optional `dc`, `world`. Cached ~60s. Snapshot only: `venueId`, `state` (`happeni
 
 ## `GET /v1/reports?venueId=`
 
-Last 20 minutes for one listing: time, kind, yard vs inside. No reporter ids.
+Last 60 minutes for one listing: time, kind, yard vs inside. No reporter ids.
 
 ## Writes
 

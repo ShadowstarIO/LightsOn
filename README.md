@@ -2,9 +2,9 @@
 
 Tired of looking for a place that’s open, walking the ward, and finding the lights out? LightsOn is there so you spend less time on empty plots and more time where something is actually happening — and so you can tell others, quietly, what you found.
 
-**Lanterns lit** means enough company on a listed plot. **Wrapped up early** means the hours said open, but the door and yard look quiet. It does not rank venues by size. A small lounge with three patrons counts.
+**Lanterns lit** means enough company on a listed plot. **Yard quiet / halls quiet** means the hours said open, but that layer looks empty. It does not rank venues by size. A small lounge with three patrons counts.
 
-A check can be sent from the **yard or the room** — they list separately. One layer is lighter until the other shows up. **Ward + Plot** is the property; rooms add to it.
+A check can be sent from the **yard or the room** — they list separately. The room weighs more. **Ward + Plot** is the property; rooms add to it. `sub` is only for apartments.
 
 `/lightson` or `/lon`
 
@@ -67,6 +67,7 @@ A second tab for moving or street scenes. Short range (a pocket, not a whole cit
 | --- | --- |
 | `/lightson` `/lon` | Open the window |
 | `/lon here` | Current world and housing plot |
+| `/lon plot` | Current plot window |
 | `/lon config` | Settings |
 | `/lon refresh` | Reload listings |
 

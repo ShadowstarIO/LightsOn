@@ -13,12 +13,24 @@ public sealed class VenueListing
     public bool Hiring { get; set; }
     public string? Website { get; set; }
     public string? Discord { get; set; }
+    public List<string> Description { get; set; } = [];
+    public List<string> Tags { get; set; } = [];
     public VenueResolution? Resolution { get; set; }
     public List<VenueSchedule> Schedule { get; set; } = [];
 
     [JsonIgnore] public OccupancySnapshot Occupancy { get; set; } = OccupancySnapshot.Unknown;
     [JsonIgnore] public IReadOnlyList<GuestNote> Notes { get; set; } = [];
     [JsonIgnore] public IReadOnlyList<OccupancyEvent> Log { get; set; } = [];
+
+    public string DescriptionText
+    {
+        get
+        {
+            if (Description is not { Count: > 0 })
+                return "";
+            return string.Join("\n", Description);
+        }
+    }
 
     public void BindHours()
     {
@@ -72,11 +84,7 @@ public sealed class VenueLocation
         {
             var place = Plot > 0 ? $"W{Ward} P{Plot}" : $"W{Ward}";
             if (RoomNo > 0)
-            {
-                if (Subdivision)
-                    place += " sub";
-                place += $" R{RoomNo}";
-            }
+                place += $"{(Subdivision ? " sub" : "")} R{RoomNo}";
             return $"{World} · {District} {place}".Trim();
         }
     }

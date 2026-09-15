@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
@@ -29,7 +30,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
 
-    public const string Version = "0.0.3.8";
+    public const string Version = "0.0.3.9";
     private const string CommandName = "/lightson";
     private const string CommandAlias = "/lon";
 
@@ -38,6 +39,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly OccupancyClient occupancy;
     private readonly MainWindow mainWindow;
     private readonly ConfigWindow configWindow;
+    private readonly PlotWindow plotWindow;
     private CancellationTokenSource refreshCts = new();
     private DateTime lastTick = DateTime.MinValue;
     private DateTime lastHere = DateTime.MinValue;
@@ -59,14 +61,16 @@ public sealed class Plugin : IDalamudPlugin
         Configuration.Save();
 
         http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.3.8 (+https://github.com/XozaShadow/LightsOn)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.3.9 (+https://github.com/XozaShadow/LightsOn)");
         directory = new DirectoryClient(http);
         occupancy = new OccupancyClient(http);
 
         mainWindow = new MainWindow(this);
         configWindow = new ConfigWindow(this);
+        plotWindow = new PlotWindow(this);
         WindowSystem.AddWindow(mainWindow);
         WindowSystem.AddWindow(configWindow);
+        WindowSystem.AddWindow(plotWindow);
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
@@ -115,8 +119,25 @@ public sealed class Plugin : IDalamudPlugin
 
     public void ToggleConfigUi() => configWindow.Toggle();
     public void ToggleMainUi() => mainWindow.Toggle();
+    public void OpenPlotWindow() => plotWindow.IsOpen = true;
+    public void SelectVenue(string id) => mainWindow.Select(id);
+    public bool MainUiOpen => mainWindow.IsOpen;
     public void Notify(string text) => Chat.Print("[LightsOn] " + text);
     public bool CanSend => SendBlock() is null;
+
+    public async Task ReportUi(VenueListing venue, string kind)
+    {
+        ActionLine = "Sending…";
+        var line = await TryReport(venue, kind).ConfigureAwait(true);
+        ActionLine = line;
+        Session.SetAction(venue.Id, line);
+    }
+
+    public async Task LeaveNoteUi(VenueListing venue, string text)
+    {
+        ActionLine = await TryNote(venue, text).ConfigureAwait(true);
+        Session.SetAction(venue.Id, ActionLine);
+    }
 
     public ScanResult ScanNow()
     {
@@ -183,6 +204,18 @@ public sealed class Plugin : IDalamudPlugin
                 Outdoors = [];
             }
 
+            var previous = Venues;
+            foreach (var venue in list)
+            {
+                var old = previous.FirstOrDefault(v => v.Id == venue.Id);
+                if (old is null)
+                    continue;
+                if (venue.Log.Count == 0 && old.Log.Count > 0)
+                    venue.Log = old.Log;
+                if (venue.Notes.Count == 0 && old.Notes.Count > 0)
+                    venue.Notes = old.Notes;
+            }
+
             Venues = list;
             StatusLine = $"{list.Count} listed venues";
             lastPoll = DateTime.UtcNow;
@@ -198,13 +231,31 @@ public sealed class Plugin : IDalamudPlugin
         }
     }
 
+    public async Task RefreshOccupancy()
+    {
+        if (!Configuration.OccupancyEnabled)
+            return;
+        try
+        {
+            var map = await occupancy.GetOccupancy(Configuration.OccupancyApiUrl, CancellationToken.None).ConfigureAwait(true);
+            foreach (var venue in Venues)
+            {
+                if (map.TryGetValue(venue.Id, out var snap) && snap is not null)
+                    venue.Occupancy = snap;
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Verbose(ex, "Occupancy refresh failed");
+        }
+    }
+
     public async Task RefreshNotes(VenueListing venue)
     {
-        if (!Configuration.OccupancyEnabled || venue.Occupancy?.IsHappening != true)
-        {
-            venue.Notes = [];
+        if (!Configuration.OccupancyEnabled)
             return;
-        }
+        if (venue.Occupancy?.IsHappening != true)
+            return;
 
         try
         {
@@ -318,7 +369,7 @@ public sealed class Plugin : IDalamudPlugin
             await occupancy.PostReport(Configuration.OccupancyApiUrl, report, CancellationToken.None).ConfigureAwait(true);
             Session.WrapSureVenue = null;
             Session.MarkSent(venue.Id, action);
-            await RefreshVenues(true).ConfigureAwait(true);
+            await RefreshOccupancy().ConfigureAwait(true);
             await RefreshLog(venue).ConfigureAwait(true);
             var line = kind == "happening"
                 ? (scan.Inside ? "Reported: lanterns are lit." : "Reported: yard is busy.")
@@ -359,11 +410,11 @@ public sealed class Plugin : IDalamudPlugin
         if (Session.OnPlot < TimeSpan.FromMinutes(Limits.LogBookDwellMinutes))
             return $"Stay about {Limits.LogBookDwellMinutes} minutes before leaving a note.";
         var trimmed = (text ?? "").Trim();
-        if (Array.IndexOf(Copy.LogPhrases, trimmed) < 0)
-            return "Pick a line from the list.";
+        if (Copy.IsLogPhrase(trimmed) is false)
+            return "Pick a line from the lists.";
 
-        var scan = ScanNow();
         var here = HousingReader.Read();
+        var scan = NearbyScan.Run(this);
         var post = new NotePost
         {
             VenueId = venue.Id,
@@ -478,7 +529,7 @@ public sealed class Plugin : IDalamudPlugin
             var here = HousingReader.Read();
             Session.HereLine = here.OnPlot ? here.Summary : "not on a plot";
         }
-        if ((now - lastTick).TotalSeconds < 2)
+        if ((now - lastTick).TotalSeconds < (MainUiOpen || plotWindow.IsOpen ? 2 : Limits.BackgroundTickSeconds))
             return;
         lastTick = now;
         if (!ClientState.IsLoggedIn)
@@ -494,18 +545,30 @@ public sealed class Plugin : IDalamudPlugin
     private void OnTerritory(uint _)
     {
         Session.PocketKey = "";
-        Session.ResetPlot("");
         Session.OutdoorPrivate = null;
     }
 
     private void TickPlot()
     {
         var key = NearbyScan.PlotKey();
+        if (key.Length == 0)
+        {
+            if (!HousingReader.Read().Inside && Session.PlotKey.Length > 0)
+                Session.ResetPlot("");
+            return;
+        }
+
         if (key != Session.PlotKey)
         {
+            var arrived = Session.PlotKey.Length == 0;
             Session.ResetPlot(key);
-            Session.Hop = key.Length == 0 ? null : NearbyScan.ListedHere(Venues);
+            Session.Hop = NearbyScan.ListedHere(Venues);
+            if (arrived && Configuration.PromptOnEnter
+                && Session.Hop is { Resolution.IsNow: true })
+                plotWindow.IsOpen = true;
         }
+        else
+            Session.Hop ??= NearbyScan.ListedHere(Venues);
 
         var scan = NearbyScan.Run(this);
         LastScanLine = scan.OnPlot ? scan.Summary : Session.HereLine;
@@ -527,14 +590,27 @@ public sealed class Plugin : IDalamudPlugin
             Session.ObserveSince = DateTimeOffset.UtcNow;
         if (DateTimeOffset.UtcNow - Session.ObserveSince < TimeSpan.FromSeconds(Limits.ObserveSeconds))
             return;
+
+        var support = venue.Occupancy?.HappeningReports ?? 0;
+        if (support >= Limits.AutoStopReports)
+            return;
+        var gap = support >= Limits.AutoSolidReports
+            ? TimeSpan.FromMinutes(Limits.AutoSolidMinutes)
+            : support >= 1
+                ? TimeSpan.FromMinutes(Limits.AutoSomeMinutes)
+                : TimeSpan.FromSeconds(Limits.SendRateSeconds);
+        if (!MainUiOpen && !plotWindow.IsOpen && support >= 1)
+            gap = TimeSpan.FromMinutes(Math.Max(Limits.AutoSomeMinutes, 10));
         if (venue.Id == Session.LastAutoVenue && scan.Inside == Session.LastAutoInside
-            && DateTimeOffset.UtcNow - Session.LastAutoHappening < TimeSpan.FromSeconds(Limits.SendRateSeconds))
+            && DateTimeOffset.UtcNow - Session.LastAutoHappening < gap)
+            return;
+        if (scan.Summary == Session.LastAutoChips && venue.Id == Session.LastAutoVenue)
             return;
 
-        _ = AutoHappening(venue, scan.Inside);
+        _ = AutoHappening(venue, scan.Inside, scan.Summary);
     }
 
-    private async Task AutoHappening(VenueListing venue, bool inside)
+    private async Task AutoHappening(VenueListing venue, bool inside, string chips)
     {
         var line = await TryReport(venue, "happening", true).ConfigureAwait(true);
         ActionLine = line;
@@ -544,6 +620,7 @@ public sealed class Plugin : IDalamudPlugin
             Session.LastAutoVenue = venue.Id;
             Session.LastAutoInside = inside;
             Session.LastAutoHappening = DateTimeOffset.UtcNow;
+            Session.LastAutoChips = chips;
             Notify($"{venue.Name}: lanterns are lit.");
         }
     }
@@ -643,8 +720,12 @@ public sealed class Plugin : IDalamudPlugin
             case "help":
                 Notify("/lightson — open LightsOn");
                 Notify("/lon here — current plot");
+                Notify("/lon plot — current plot window");
                 Notify("/lon config — settings");
                 Notify("/lon refresh — reload listings");
+                break;
+            case "plot":
+                OpenPlotWindow();
                 break;
             case "config":
                 ToggleConfigUi();

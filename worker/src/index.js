@@ -1,11 +1,12 @@
-const WINDOW_MS = 20 * 60 * 1000;
+const WINDOW_MS = 60 * 60 * 1000;
+const QUIET_MS = 45 * 60 * 1000;
 const RATE_MS = 45 * 1000;
 const HISTORY_MS = 14 * 24 * 60 * 60 * 1000;
-const NOTE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
+const NOTE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const NOTE_RATE_MS = 24 * 60 * 60 * 1000;
 const MAX_BODY = 8 * 1024;
 const VENUES_URL = "https://api.ffxivvenues.com/venue";
-const UA = "LightsOn/0.0.3.8 (+https://github.com/XozaShadow/LightsOn)";
+const UA = "LightsOn/0.0.3.9 (+https://github.com/XozaShadow/LightsOn)";
 const TIER_RANK = { extremely_busy: 3, some_activity: 2, some_wandering: 1 };
 const venueCache = new Map();
 let migrateTried = false;
@@ -123,28 +124,34 @@ function ingestOk(request, env) {
 async function health(env) {
   const since = new Date(Date.now() - WINDOW_MS).toISOString();
   const reports = await env.DB.prepare("SELECT COUNT(*) AS n FROM reports WHERE at >= ?").bind(since).first();
-  return { ok: true, reports: reports?.n ?? 0, windowMinutes: 20 };
+  return { ok: true, reports: reports?.n ?? 0, windowMinutes: 60, quietMinutes: 45 };
 }
 
 async function getOccupancy(env, params) {
   void params;
-  const since = new Date(Date.now() - WINDOW_MS).toISOString();
+  const happeningSince = new Date(Date.now() - WINDOW_MS).toISOString();
+  const quietSince = new Date(Date.now() - QUIET_MS).toISOString();
   const { results } = await env.DB.prepare(
     `SELECT venue_id AS venueId,
-            COUNT(DISTINCT CASE WHEN kind = 'happening' THEN reporter_id END) AS happeningReports,
-            COUNT(DISTINCT CASE WHEN kind = 'wrapped_up' THEN reporter_id END) AS wrappedUpReports,
-            COUNT(DISTINCT CASE WHEN kind = 'happening' AND inside = 1 THEN reporter_id END) AS interiorHappening,
-            COUNT(DISTINCT CASE WHEN kind = 'wrapped_up' AND inside = 1 THEN reporter_id END) AS interiorWrapped,
-            COUNT(DISTINCT CASE WHEN kind = 'happening' AND inside = 0 THEN reporter_id END) AS exteriorHappening,
-            COUNT(DISTINCT CASE WHEN kind = 'wrapped_up' AND inside = 0 THEN reporter_id END) AS exteriorWrapped,
-            MAX(door_locked) AS doorLocked,
+            COUNT(DISTINCT CASE WHEN kind = 'happening' AND at >= ? THEN reporter_id END) AS happeningReports,
+            COUNT(DISTINCT CASE WHEN kind = 'wrapped_up' AND at >= ? THEN reporter_id END) AS wrappedUpReports,
+            COUNT(DISTINCT CASE WHEN kind = 'happening' AND inside = 1 AND at >= ? THEN reporter_id END) AS interiorHappening,
+            COUNT(DISTINCT CASE WHEN kind = 'wrapped_up' AND inside = 1 AND at >= ? THEN reporter_id END) AS interiorWrapped,
+            COUNT(DISTINCT CASE WHEN kind = 'happening' AND inside = 0 AND at >= ? THEN reporter_id END) AS exteriorHappening,
+            COUNT(DISTINCT CASE WHEN kind = 'wrapped_up' AND inside = 0 AND at >= ? THEN reporter_id END) AS exteriorWrapped,
+            MAX(CASE WHEN at >= ? THEN door_locked ELSE 0 END) AS doorLocked,
             MAX(at) AS updatedAt
      FROM reports
      WHERE at >= ?
      GROUP BY venue_id
      ORDER BY MAX(at) DESC
      LIMIT 200`,
-  ).bind(since).all();
+  ).bind(
+    happeningSince, quietSince,
+    happeningSince, quietSince,
+    happeningSince, quietSince,
+    happeningSince, happeningSince,
+  ).all();
   return (results ?? []).map((row) => occupancyFromAgg(row));
 }
 
@@ -262,6 +269,13 @@ async function postReport(env, request) {
     ).run();
   }
 
+  try {
+    await env.DB.prepare(
+      `DELETE FROM reports WHERE venue_id = ? AND id NOT IN (
+         SELECT id FROM reports WHERE venue_id = ? ORDER BY at DESC LIMIT 12)`,
+    ).bind(body.venueId, body.venueId).run();
+  } catch { /* cap is best-effort */ }
+
   return json({ ok: true, venueId: body.venueId });
 }
 
@@ -275,7 +289,7 @@ async function getReportLog(env, venueId) {
               door_locked AS doorLocked, voices, glance, music
        FROM reports
        WHERE venue_id = ? AND at >= ?
-       ORDER BY at DESC LIMIT 24`,
+       ORDER BY at DESC LIMIT 12`,
     ).bind(venueId, since).all();
     return mapLog(results);
   } catch {
@@ -283,7 +297,7 @@ async function getReportLog(env, venueId) {
       `SELECT kind, at, inside, threshold_met AS thresholdMet
        FROM reports
        WHERE venue_id = ? AND at >= ?
-       ORDER BY at DESC LIMIT 24`,
+       ORDER BY at DESC LIMIT 12`,
     ).bind(venueId, since).all();
     return mapLog(results);
   }
@@ -457,18 +471,9 @@ async function readJson(request) {
   }
 }
 
-const LOG_PHRASES = new Set([
-  "Kind host",
-  "Great music",
-  "Warm crowd",
-  "Quiet corner",
-  "Come again",
-  "Short wait",
-  "Fine drinks",
-  "Good floor",
-  "Friendly door",
-  "Worth the walk",
-]);
+const LOG_ADJ = ["Kind", "Warm", "Quiet", "Lively", "Great", "Fine", "Friendly", "Soft", "Bright", "Worth"];
+const LOG_NOUN = ["host", "music", "crowd", "corner", "wait", "drinks", "floor", "door", "walk", "hall"];
+const LOG_PHRASES = new Set(LOG_ADJ.flatMap((a) => LOG_NOUN.map((n) => `${a} ${n}`)));
 
 function sanitizeNote(raw) {
   const s = String(raw || "").replace(/\s+/g, " ").trim();

@@ -295,7 +295,7 @@ internal static class NearbyScan
         var here = HousingReader.Read();
         if (!here.OnPlot)
             return "";
-        return $"{CurrentWorldName()}|{here.Ward}|{here.Plot}|{(here.Subdivision ? 1 : 0)}";
+        return $"{CurrentWorldName()}|{here.Ward}|{here.Plot}";
     }
 
     public static string CurrentWorldName()
