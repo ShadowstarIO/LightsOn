@@ -19,7 +19,7 @@ public sealed class MainWindow : Window
     private string worldFilter = "";
     private int filter;
     private string? selectedId;
-    private static readonly string[] StatusFilters = ["All", "Lanterns lit", "Open now", "Vacant", "No data"];
+    private static readonly string[] StatusFilters = ["All", "Lanterns Lit", "Open Now", "Vacant", "No Data"];
 
     public MainWindow(Plugin plugin)
         : base($"LightsOn {Plugin.Version}###LightsOnMain")
@@ -74,10 +74,10 @@ public sealed class MainWindow : Window
         if (pending is null)
             return;
         ImGui.TextWrapped("Most of the company here looks like friends or Free Company. Is this a private gathering?");
-        if (ImGui.SmallButton("Yes, keep it off the list"))
+        if (ImGui.SmallButton("Yes, Private"))
             _ = plugin.TryOutdoor(pending.Scan, true);
         ImGui.SameLine();
-        if (ImGui.SmallButton("No, it's public"))
+        if (ImGui.SmallButton("No, Public"))
             _ = plugin.TryOutdoor(pending.Scan, false);
         ImGui.SameLine();
         if (ImGui.SmallButton("Skip"))
@@ -93,6 +93,12 @@ public sealed class MainWindow : Window
         ImGui.SameLine();
         if (ImGui.SmallButton("Refresh"))
             _ = plugin.RefreshVenues(true);
+        ImGui.SameLine();
+        if (ImGui.SmallButton("Directory"))
+        {
+            try { Dalamud.Utility.Util.OpenLink(Copy.DirectoryUrl); }
+            catch (Exception ex) { Plugin.Log.Verbose(ex, "Open link"); }
+        }
         ImGui.SameLine();
         if (ImGui.SmallButton("Settings"))
             plugin.ToggleConfigUi();
@@ -118,18 +124,25 @@ public sealed class MainWindow : Window
             worldPick = "";
 
         ImGui.SetNextItemWidth(180);
-        ImGui.InputTextWithHint("##q", "Search name", ref query, 80);
+        ImGui.InputTextWithHint("##q", "Search Name", ref query, 80);
         ImGui.SameLine();
         ImGui.SetNextItemWidth(150);
-        PlaceCombo("##dc", dcPick.Length == 0 ? "All data centers" : dcPick, dcs, "All data centers", ref dcFilter, ref dcPick);
+        PlaceCombo("##dc", dcPick.Length == 0 ? "All Data Centers" : dcPick, dcs, "All Data Centers", ref dcFilter, ref dcPick);
         ImGui.SameLine();
         ImGui.SetNextItemWidth(150);
-        PlaceCombo("##world", worldPick.Length == 0 ? "All worlds" : worldPick, worlds, "All worlds", ref worldFilter, ref worldPick);
+        PlaceCombo("##world", worldPick.Length == 0 ? "All Worlds" : worldPick, worlds, "All Worlds", ref worldFilter, ref worldPick);
+        if (worldPick.Length > 0 && dcPick.Length == 0)
+        {
+            var dc = plugin.Venues.FirstOrDefault(v =>
+                string.Equals(v.Location?.World, worldPick, StringComparison.OrdinalIgnoreCase))?.Location?.DataCenter;
+            if (!string.IsNullOrEmpty(dc))
+                dcPick = dc;
+        }
         ImGui.SameLine();
         ImGui.SetNextItemWidth(130);
         ImGui.Combo("##status", ref filter, StatusFilters, StatusFilters.Length);
         ImGui.SameLine();
-        if (ImGui.Checkbox("Other regions", ref showOther))
+        if (ImGui.Checkbox("Other Regions", ref showOther))
         {
             plugin.Configuration.ShowOtherRegions = showOther;
             plugin.Configuration.Save();
@@ -152,7 +165,10 @@ public sealed class MainWindow : Window
         var laterRows = rows.Where(v => v.Resolution?.IsNow != true).ToList();
         DrawVenueRows(openRows);
         if (openRows.Count > 0 && laterRows.Count > 0)
+        {
+            UiTheme.Gap();
             ImGui.Separator();
+        }
         DrawVenueRows(laterRows);
         if (rows.Count == 0)
             ImGui.TextDisabled("No venues match.");
@@ -174,9 +190,11 @@ public sealed class MainWindow : Window
             var loc = venue.Location;
             var occ = venue.Occupancy ?? OccupancySnapshot.Unknown;
             var open = venue.Resolution?.IsNow == true;
-            var mark = occ.IsHappening ? "● " : occ.IsWrappedUp ? "○ " : open ? "· " : "  ";
+            var dot = open ? VenueView.BadgeColor(occ) : UiTheme.Mute;
+            ImGui.TextColored(dot, "·");
+            ImGui.SameLine(0, 6);
             var name = venue.Name ?? "";
-            if (ImGui.Selectable($"{mark}{name}##{venue.Id}", venue.Id == selectedId))
+            if (ImGui.Selectable($"{name}##{venue.Id}", venue.Id == selectedId))
                 selectedId = venue.Id;
             if (open)
             {

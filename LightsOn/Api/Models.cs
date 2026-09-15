@@ -82,10 +82,14 @@ public sealed class VenueLocation
     {
         get
         {
-            var place = Plot > 0 ? $"W{Ward} P{Plot}" : $"W{Ward}";
+            var plot = HousingReader.CanonicalPlot(Plot, Subdivision && RoomNo == 0);
+            var place = plot > 0 ? $"W{Ward} P{plot}" : $"W{Ward}";
             if (RoomNo > 0)
                 place += $"{(Subdivision ? " sub" : "")} R{RoomNo}";
-            return $"{World} · {District} {place}".Trim();
+            var dc = string.IsNullOrWhiteSpace(DataCenter) ? "" : DataCenter + " · ";
+            var world = string.IsNullOrWhiteSpace(World) ? "" : World + " · ";
+            var zone = string.IsNullOrWhiteSpace(District) ? "" : District + " ";
+            return $"{dc}{world}{zone}{place}".Trim();
         }
     }
 }

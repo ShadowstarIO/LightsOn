@@ -1,3 +1,4 @@
+using System;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 
@@ -15,4 +16,36 @@ internal static class UiTheme
 
     public static void Section(string label, bool action = false)
         => ImGui.TextColored(action ? Amber : Teal, label);
+
+    public static void Gap() => ImGui.Dummy(new Vector2(0, 8));
+
+    public static void Hint(string text)
+    {
+        ImGui.SameLine();
+        ImGui.TextDisabled("(i)");
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(text);
+    }
+
+    public static bool SearchCombo(string id, ref int current, string[] items, ref string filter)
+    {
+        var preview = items.Length == 0 ? "" : items[Math.Clamp(current, 0, items.Length - 1)];
+        if (!ImGui.BeginCombo(id, preview))
+            return false;
+        ImGui.SetNextItemWidth(-1);
+        ImGui.InputTextWithHint("##f" + id, "Search", ref filter, 40);
+        var changed = false;
+        for (var i = 0; i < items.Length; i++)
+        {
+            if (filter.Length > 0 && items[i].IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
+                continue;
+            if (ImGui.Selectable(items[i], i == current))
+            {
+                current = i;
+                changed = true;
+            }
+        }
+        ImGui.EndCombo();
+        return changed;
+    }
 }

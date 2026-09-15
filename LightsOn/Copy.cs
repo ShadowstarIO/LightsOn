@@ -2,41 +2,39 @@ namespace LightsOn;
 
 internal static class Copy
 {
-    public const string Happening = "Lanterns lit";
-    public const string HappeningButton = "Lanterns lit";
-    public const string Wrapped = "Halls are quiet";
-    public const string WrappedButton = "Quiet halls";
-    public const string YardBusy = "Yard busy";
-    public const string YardQuiet = "Yard quiet";
-    public const string MarkedOpen = "Open now";
+    public const string Happening = "Lanterns Lit";
+    public const string HappeningButton = "Lanterns Lit";
+    public const string Wrapped = "Quiet Halls";
+    public const string WrappedButton = "Quiet Halls";
+    public const string YardBusy = "Yard Busy";
+    public const string YardQuiet = "Yard Quiet";
+    public const string MarkedOpen = "Open Now";
     public const string NoReport = "No occupancy yet";
     public const string EnoughCompany = "enough company";
     public const string Quiet = "quiet";
-    public const string NoPlot = "No plot on this listing — occupancy is for Ward + Plot houses.";
-    public const string DoorLocked = "locked";
-    public const string MixedReports =
-        "Yard and room don't agree. LightsOn leans toward whichever side has more weight — the room counts extra.";
+    public const string NoPlot = "No plot on this listing. Occupancy is for Ward + Plot houses.";
+    public const string DoorLocked = "Locked";
+    public const string DirectoryUrl = "https://ffxivvenues.com/";
+    public const string OutdoorsHint =
+        "Short-range outdoor pockets. After about 10 minutes in the same pocket, LightsOn can note how lively it feels.";
 
     public const string Welcome =
         "Tired of walking in on posted hours and an empty room? LightsOn is occupancy for listed venues: lanterns lit when there is enough company, quiet when the yard or halls look empty. Reports are optional, on the plot, and never include names or counts.";
 
-    public const string ReportsBlurb =
-        "Off until you opt in. LightsOn never sends names, IDs, or how many patrons it saw. Quiet is always manual. Lanterns try to send themselves when the scan is enough.";
-
-    public const string LogBookHint =
-        "Pick an adjective and a noun. Lanterns must be lit, posted hours, and a short wait on the property. Not a free-form review.";
-
-    public const string OutdoorsHint =
-        "Outdoor scenes in a short pocket around you — not a whole city. After about 10 minutes in the same pocket, LightsOn can note how lively it feels. Friends and Free Company can be left out. Private gatherings can be hidden.";
-
     public static readonly string[] LogAdjectives =
     [
-        "Kind", "Warm", "Quiet", "Lively", "Great", "Fine", "Friendly", "Soft", "Bright", "Worth",
+        "Warm", "Kind", "Gentle", "Friendly", "Cozy", "Calm", "Quiet", "Soft",
+        "Bright", "Lively", "Sweet", "Lovely", "Nice", "Easy", "Smooth", "Mellow",
+        "Pleasant", "Welcoming", "Relaxed", "Cheerful", "Peaceful", "Inviting", "Fine", "Great",
+        "Good", "Light", "Fresh", "Happy", "Steady", "Open", "Fair", "Polite",
     ];
 
     public static readonly string[] LogNouns =
     [
-        "host", "music", "crowd", "corner", "wait", "drinks", "floor", "door", "walk", "hall",
+        "host", "staff", "welcome", "music", "crowd", "room", "hall", "space",
+        "vibe", "lights", "mood", "company", "energy", "scene", "bar", "floor",
+        "stage", "drinks", "mix", "chat", "seats", "corner", "night", "air",
+        "door", "yard", "wait", "walk", "set", "entry",
     ];
 
     public static string LogLine(int adj, int noun)

@@ -8,23 +8,23 @@ LightsOn answers “is anyone at this listed venue?” and “is there a scene i
 - Friend list
 - Free Company tag comparison
 - The numeric score used for “enough company”
-- Online-status labels used as extra score (in character, seeking company, at the bench)
-- Who is targeted / targeting you (a glance)
+- Online-status labels (IC, Party Finder, melding)
+- Who is targeted / targeting you (glances)
 - That a tell, party line, or say happened with someone already in the scan — never the text
 
 Those never leave the machine.
 
 ## Opt-in (HTTPS)
 
-Only with **Send reports** on:
+Only with **Send Reports** on:
 
-**Venue occupancy** — listed venue id; lanterns lit or wrapped up early; random reporter id; world / district / ward / plot / subdivision / inside; `thresholdMet` (boolean). On-plot only.
+**Venue occupancy** — listed venue id; lanterns lit or wrapped up early; random reporter id; world / district / ward / plot / inside; `thresholdMet` (boolean). On-plot only.
 
-**Log book** — same proof, plus a closed adjective+noun phrase. Only while lanterns are lit, after ~8 minutes on the plot.
+**Log Book** — same proof, plus a pair from two lists. Only while lanterns are lit, after ~8 minutes on the plot.
 
 **Outdoor scenes** — world, place name, pocket id, tier, in-character boolean, optional private-gathering vote. No names.
 
-Listings are fetched from the public community venue directory (`https://api.ffxivvenues.com/venue`). Occupancy is LightsOn’s host. Polling is slow on purpose so that host stays cheap.
+Listings are fetched from the public community venue directory ([FFXIV Venues](https://ffxivvenues.com/)). Occupancy is LightsOn’s host. Occupancy GET is public; writes are not.
 
 ## Never collected
 
@@ -32,8 +32,8 @@ Listings are fetched from the public community venue directory (`https://api.ffx
 - Your character name or Content ID
 - Exact coordinates (outdoor pockets are a coarse cell)
 - Unlisted houses
-- Chat logs (the words themselves are never uploaded; an optional boolean that someone in range spoke can be scored locally)
+- Chat logs
 
-## Reporter id
+## Reporter ID
 
-Generated locally. Settings → Reset reporter id.
+Generated locally. Settings → Reset ID. Reports wait 20 minutes after a reset.

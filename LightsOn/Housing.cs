@@ -71,10 +71,27 @@ internal static class HousingReader
             return default;
 
         var subdivision = division == 2;
+        plot = CanonicalPlot(plot, subdivision);
         if (plot is < 1 or > 60)
             return new HousingAddress(inside, district, ward, 0, room, subdivision);
 
         return new HousingAddress(inside, district, ward, plot, room, subdivision);
+    }
+
+    public static int CanonicalPlot(int plot, bool subdivision)
+    {
+        if (plot is >= 1 and <= 30 && subdivision)
+            return plot + 30;
+        return plot;
+    }
+
+    public static bool SameDistrict(string? a, string? b)
+    {
+        var ra = ResolveDistrict(a ?? "");
+        var rb = ResolveDistrict(b ?? "");
+        if (ra.Length > 0 && rb.Length > 0)
+            return string.Equals(ra, rb, StringComparison.OrdinalIgnoreCase);
+        return string.Equals((a ?? "").Trim(), (b ?? "").Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
     public static string DistrictFromTerritory(ushort territoryId)
@@ -101,7 +118,7 @@ internal static class HousingReader
     }
 
     public static bool IsKnownDistrict(string name) =>
-        name is "Mist" or "The Lavender Beds" or "The Goblet" or "Shirogane" or "Empyreum";
+        name is "Mist" or "Lavender Beds" or "Goblet" or "Shirogane" or "Empyreum";
 
     public static string ResolveDistrict(string territoryName)
     {
@@ -110,9 +127,9 @@ internal static class HousingReader
         if (Contains(territoryName, "Mist") || Contains(territoryName, "Topmast"))
             return "Mist";
         if (Contains(territoryName, "Lavender") || Contains(territoryName, "Lily Hills"))
-            return "The Lavender Beds";
+            return "Lavender Beds";
         if (Contains(territoryName, "Goblet") || Contains(territoryName, "Sultana"))
-            return "The Goblet";
+            return "Goblet";
         if (Contains(territoryName, "Shirogane") || Contains(territoryName, "Kobai"))
             return "Shirogane";
         if (Contains(territoryName, "Empyreum") || Contains(territoryName, "Ingleside"))
