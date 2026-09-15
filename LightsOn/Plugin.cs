@@ -29,7 +29,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
 
-    public const string Version = "0.0.3.7";
+    public const string Version = "0.0.3.8";
     private const string CommandName = "/lightson";
     private const string CommandAlias = "/lon";
 
@@ -59,7 +59,7 @@ public sealed class Plugin : IDalamudPlugin
         Configuration.Save();
 
         http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.3.7 (+https://github.com/XozaShadow/LightsOn)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.3.8 (+https://github.com/XozaShadow/LightsOn)");
         directory = new DirectoryClient(http);
         occupancy = new OccupancyClient(http);
 
@@ -280,11 +280,13 @@ public sealed class Plugin : IDalamudPlugin
         else
         {
             if (scan.ThresholdMet && requested != "door_locked")
-                return "Enough company on this layer. Wrapped up is blocked.";
+                return "Enough company on this layer. Quiet is blocked.";
             if (!fromAuto && requested != "door_locked" && Session.WrapSureVenue != venue.Id)
             {
                 Session.WrapSureVenue = venue.Id;
-                return "Are you sure this layer is wrapped up? Press again to send.";
+                return scan.Inside
+                    ? "Are you sure the halls are quiet? Press again to send."
+                    : "Are you sure the yard is quiet? Press again to send.";
             }
         }
 
@@ -318,7 +320,9 @@ public sealed class Plugin : IDalamudPlugin
             Session.MarkSent(venue.Id, action);
             await RefreshVenues(true).ConfigureAwait(true);
             await RefreshLog(venue).ConfigureAwait(true);
-            var line = kind == "happening" ? "Reported: lanterns are lit." : "Reported: wrapped up.";
+            var line = kind == "happening"
+                ? (scan.Inside ? "Reported: lanterns are lit." : "Reported: yard is busy.")
+                : (scan.Inside ? "Reported: halls are quiet." : "Reported: yard is quiet.");
             if (report.Proof.DoorLocked)
                 line += " Door locked.";
             Session.SetAction(venue.Id, line);

@@ -5,7 +5,7 @@ const NOTE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
 const NOTE_RATE_MS = 24 * 60 * 60 * 1000;
 const MAX_BODY = 8 * 1024;
 const VENUES_URL = "https://api.ffxivvenues.com/venue";
-const UA = "LightsOn/0.0.3.7 (+https://github.com/XozaShadow/LightsOn)";
+const UA = "LightsOn/0.0.3.8 (+https://github.com/XozaShadow/LightsOn)";
 const TIER_RANK = { extremely_busy: 3, some_activity: 2, some_wandering: 1 };
 const venueCache = new Map();
 let migrateTried = false;
@@ -157,15 +157,16 @@ function occupancyFromAgg(row) {
   const extW = Number(row.exteriorWrapped || 0);
   const interior = intH + intW > 0;
   const exterior = extH + extW > 0;
+  const lean = intH * 2 + extH - intW * 2 - extW;
   let state = "unknown";
-  if (intH > 0 && extW > 0)
-    state = "mixed";
-  else if (extH > 0 && intW > 0)
-    state = "mixed";
-  else if (happening > 0)
+  if (happening === 0 && wrapped === 0)
+    state = "unknown";
+  else if (lean > 0)
     state = "happening";
-  else if (wrapped > 0)
+  else if (lean < 0)
     state = "wrapped_up";
+  else
+    state = "mixed";
   const updated = row.updatedAt || new Date().toISOString();
   return {
     venueId: row.venueId,

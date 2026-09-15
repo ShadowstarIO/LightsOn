@@ -4,8 +4,10 @@ internal static class Copy
 {
     public const string Happening = "Lanterns lit";
     public const string HappeningButton = "Lanterns are lit";
-    public const string Wrapped = "Wrapped up";
-    public const string WrappedButton = "Wrapped up";
+    public const string Wrapped = "Halls are quiet";
+    public const string WrappedButton = "Halls are quiet";
+    public const string YardBusy = "Yard is busy";
+    public const string YardQuiet = "Yard is quiet";
     public const string MarkedOpen = "Open now";
     public const string NoReport = "No occupancy yet";
     public const string EnoughCompany = "enough company";
@@ -13,10 +15,10 @@ internal static class Copy
     public const string NoPlot = "No plot on this listing — occupancy is for Ward + Plot houses.";
     public const string DoorLocked = "Door is locked";
     public const string MixedReports =
-        "People inside, and a quiet yard, in the same window. The door may be locked to the street — judge for yourself.";
+        "Yard and room don't agree. LightsOn leans toward whichever side has more weight — the room counts extra.";
 
     public const string Welcome =
-        "Tired of walking in on posted hours and an empty room? LightsOn is occupancy for listed venues: lanterns lit when there is enough company, wrapped up when it looks quiet. Reports are optional, on the plot, and never include names or counts.";
+        "Tired of walking in on posted hours and an empty room? LightsOn is occupancy for listed venues: lanterns lit when there is enough company, quiet when the yard or halls look empty. Reports are optional, on the plot, and never include names or counts.";
 
     public const string ReportsBlurb =
         "Off until you opt in. LightsOn never sends names, IDs, or how many patrons it saw. You can report the yard and the room separately — the list shows both.";

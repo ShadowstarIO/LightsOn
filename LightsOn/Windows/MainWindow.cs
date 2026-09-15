@@ -221,20 +221,23 @@ public sealed class MainWindow : Window
         ImGui.TextDisabled(FlagsLine(venue));
 
         ImGui.Spacing();
-        if (occ.IsMixed)
-        {
-            ImGui.TextColored(UiTheme.Amber, "Mixed reports");
-            ImGui.TextWrapped(Copy.MixedReports);
-        }
-        else if (occ.IsHappening)
+        var lean = Lean(occ);
+        if (lean > 0)
         {
             ImGui.TextColored(UiTheme.Happening, Copy.Happening);
             ImGui.TextWrapped(SummaryLine(occ, venue.Log));
         }
-        else if (occ.IsWrappedUp)
+        else if (lean < 0)
         {
-            ImGui.TextColored(UiTheme.Wrapped, Copy.Wrapped);
+            ImGui.TextColored(lean < 0 && occ.InteriorWrapped > 0 && occ.ExteriorWrapped > 0
+                ? UiTheme.Orange
+                : UiTheme.Wrapped, Copy.Wrapped);
             ImGui.TextWrapped(SummaryLine(occ, venue.Log));
+        }
+        else if (occ.HappeningReports + occ.WrappedUpReports > 0)
+        {
+            ImGui.TextColored(UiTheme.Amber, "Split reports");
+            ImGui.TextWrapped(Copy.MixedReports);
         }
         else
             ImGui.TextDisabled(Copy.NoReport);
@@ -304,9 +307,9 @@ public sealed class MainWindow : Window
 
         ImGui.Spacing();
         var canSend = plugin.CanSend;
-        DrawSend(venue, Copy.HappeningButton, "happening", canSend, here.Inside);
+        DrawSend(venue, here.Inside ? Copy.HappeningButton : Copy.YardBusy, "happening", canSend, here.Inside);
         ImGui.SameLine();
-        DrawSend(venue, Copy.WrappedButton, "wrapped_up", canSend, here.Inside);
+        DrawSend(venue, here.Inside ? Copy.WrappedButton : Copy.YardQuiet, "wrapped_up", canSend, here.Inside);
         if (!here.Inside)
         {
             ImGui.SameLine();
@@ -558,7 +561,9 @@ public sealed class MainWindow : Window
 
     private static string EventLine(OccupancyEvent row)
     {
-        var what = row.Kind == "happening" ? Copy.Happening : Copy.Wrapped;
+        var what = row.Inside
+            ? (row.Kind == "happening" ? Copy.Happening : Copy.Wrapped)
+            : (row.Kind == "happening" ? Copy.YardBusy : Copy.YardQuiet);
         var bits = new System.Collections.Generic.List<string> { what };
         if (row.DoorLocked)
             bits.Add("🔒");
@@ -581,7 +586,7 @@ public sealed class MainWindow : Window
         var down = rows.Count(e => e.Kind == "wrapped_up");
         if (up == 0 && down == 0)
             return "";
-        return $"+{up} / −{down}";
+        return $"+{up} / -{down}";
     }
 
     private static int TierRank(string tier) => tier switch
@@ -608,12 +613,17 @@ public sealed class MainWindow : Window
     {
         if (occ.HappeningReports == 0 && occ.WrappedUpReports == 0)
             return ("open?", UiTheme.Yellow);
-        if (occ.HappeningReports > 0 && occ.WrappedUpReports == 0)
+        var lean = Lean(occ);
+        if (lean > 0)
             return ("open!", UiTheme.Happening);
-        if (occ.IsMixed)
+        if (lean == 0)
             return ("open~", UiTheme.Amber);
         if (occ.InteriorWrapped > 0 && occ.ExteriorWrapped > 0 && occ.HappeningReports == 0)
             return ("open~", UiTheme.Orange);
         return ("open~", UiTheme.Yellow);
     }
+
+    private static int Lean(OccupancySnapshot occ) =>
+        occ.InteriorHappening * 2 + occ.ExteriorHappening
+        - occ.InteriorWrapped * 2 - occ.ExteriorWrapped;
 }
