@@ -22,7 +22,8 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: db80b407c9444b69c5bc38bbe07efb38
           workingDirectory: worker
-          command: d1 execute lightson --remote --file=schema.sql
+          wranglerVersion: "4.34.0"
+          command: d1 execute lightson --remote --yes --file=schema.sql
 
       - name: Deploy worker
         uses: cloudflare/wrangler-action@v3
@@ -30,6 +31,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: db80b407c9444b69c5bc38bbe07efb38
           workingDirectory: worker
+          wranglerVersion: "4.34.0"
           command: deploy
           secrets: |
             INGEST_KEY

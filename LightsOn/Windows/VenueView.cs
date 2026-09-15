@@ -17,13 +17,17 @@ internal static class VenueView
         var here = HousingReader.Read();
 
         ImGui.TextWrapped(venue.Name ?? "");
-        ImGui.SameLine();
-        if (!currentPlot && ImGui.SmallButton("Current plot"))
-            plugin.OpenPlotWindow();
-        ImGui.TextWrapped(venue.HoursLine);
+        if (!currentPlot)
+        {
+            ImGui.SameLine();
+            if (ImGui.SmallButton("Pop out"))
+                plugin.OpenPlotWindow();
+        }
 
         var lean = Lean(occ);
         ImGui.TextColored(BadgeColor(occ), SummaryStatus(occ, venue.Log, lean));
+        ImGui.SameLine();
+        ImGui.TextDisabled(venue.HoursLine);
 
         if (onPlot)
             ImGui.TextWrapped($"On this plot · {(here.Inside ? "inside" : "outside")} · {loc?.Address ?? here.Summary}");

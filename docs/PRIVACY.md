@@ -20,7 +20,7 @@ Only with **Send reports** on:
 
 **Venue occupancy** — listed venue id; lanterns lit or wrapped up early; random reporter id; world / district / ward / plot / subdivision / inside; `thresholdMet` (boolean). On-plot only.
 
-**Log book** — same proof, plus a short text field (2–80 characters, no links). Only while lanterns are lit, after ~20 minutes on the plot.
+**Log book** — same proof, plus a closed adjective+noun phrase. Only while lanterns are lit, after ~8 minutes on the plot.
 
 **Outdoor scenes** — world, place name, pocket id, tier, in-character boolean, optional private-gathering vote. No names.
 

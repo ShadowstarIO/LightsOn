@@ -275,8 +275,6 @@ internal static class NearbyScan
             && HousingReader.IsKnownDistrict(here.District)
             && !string.Equals(here.District, loc.District, StringComparison.OrdinalIgnoreCase))
             return false;
-        if (loc.Subdivision && !here.Subdivision)
-            return false;
         return true;
     }
 

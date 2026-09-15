@@ -17,6 +17,7 @@ public sealed class Session
     public string LastAutoChips { get; set; } = "";
     public string LastAutoVenue { get; set; } = "";
     public bool LastAutoInside { get; set; }
+    public DateTimeOffset LastAutoHappening { get; set; }
     public DateTimeOffset LastOutdoorPost { get; set; }
     public DateTimeOffset ObserveSince { get; set; }
     public DateTimeOffset LastScanAt { get; set; }
@@ -71,6 +72,9 @@ public sealed class Session
         WrapSureVenue = null;
         ObserveSince = key.Length == 0 ? default : DateTimeOffset.UtcNow;
         LastAutoChips = "";
+        LastAutoVenue = "";
+        LastAutoInside = false;
+        LastAutoHappening = default;
         Check.Clear();
         HeardNames.Clear();
         SelfSpoke = false;

@@ -26,7 +26,7 @@ export default {
     try {
       const url = new URL(request.url);
       if (request.method === "GET" && url.pathname === "/")
-        return json({ name: "LightsOn", windowMinutes: 20, occupancy: "/v1/occupancy" });
+        return json({ name: "LightsOn", windowMinutes: 60, quietMinutes: 45, occupancy: "/v1/occupancy" });
       if (request.method === "GET" && url.pathname === "/v1/health")
         return json(await health(env));
       if (request.method === "GET" && url.pathname === "/v1/occupancy")
@@ -152,7 +152,8 @@ async function getOccupancy(env, params) {
     happeningSince, quietSince,
     happeningSince, happeningSince,
   ).all();
-  return (results ?? []).map((row) => occupancyFromAgg(row));
+  return (results ?? []).map((row) => occupancyFromAgg(row))
+    .filter((row) => row.happeningReports + row.wrappedUpReports > 0);
 }
 
 function occupancyFromAgg(row) {
@@ -523,8 +524,6 @@ function plotMatches(venue, proof) {
   if (Number(venue.ward) !== Number(proof.ward))
     return false;
   if (Number(venue.plot) !== Number(proof.plot))
-    return false;
-  if (Number(venue.subdivision) === 1 && !proof.subdivision)
     return false;
   return true;
 }

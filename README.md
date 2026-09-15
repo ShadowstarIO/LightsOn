@@ -37,11 +37,11 @@ Never uploaded:
 
 The server sees a venue or outdoor pocket id, lanterns lit / wrapped up early / a scene tier, a resettable random reporter id, and booleans (enough company, in character, private gathering). Friends and Free Company are subtracted on your machine first.
 
-A scan with enough company cannot file wrapped up early. Several reports raise confidence. Public occupancy lasts about **20 minutes**. History is kept for hosts, not shown as a graveyard of old closures.
+A scan with enough company cannot file wrapped up early. Several unique reporters raise confidence. Public occupancy lasts about **60 minutes** for lanterns, **45 minutes** for quiet. History is kept for hosts, not shown as a graveyard of old closures.
 
 ## Log book
 
-While lanterns are lit, someone who has been on that plot about **20 minutes** can leave a short note (up to 80 characters): *great music*, *kind host*. Not a rating. No links. Notes fade after **two weeks**. One note per person per venue per day.
+While lanterns are lit, someone who has been on that plot about **8 minutes** (yard and halls count as one stay) can leave a short pair from two lists: *Kind host*, *Warm music*. Not a rating. No free-form text. Notes fade after **7 days**. One note per person per venue per day. Cap 12.
 
 ## Outdoors
 
@@ -50,9 +50,9 @@ A second tab for moving or street scenes. Short range (a pocket, not a whole cit
 ## Settings
 
 - Listings only (hours, no occupancy fetched or sent)
-- Send reports (master opt-in; wrapped-up is locked for 20 minutes after you turn this on)
-- Auto lanterns-lit when you are inside with enough company
-- Prompt when you walk onto a listed plot
+- Send reports (master opt-in)
+- Auto lanterns when the scan is enough (quiet is always a button)
+- Open Current plot when you walk onto an open listed venue
 - Leave friends / Free Company out of company
 - Count in-character / seeking company / at the bench as extra score
 - Count a glance (looking at / looked at)
