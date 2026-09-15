@@ -447,7 +447,7 @@ public sealed class MainWindow : Window
         ImGui.EndCombo();
     }
 
-    private readonly record struct OutdoorZone(
+    private sealed record OutdoorZone(
         string Key,
         int Rank,
         int Count,
