@@ -65,7 +65,7 @@ public sealed class ConfigWindow : Window
             cfg.Save();
         }
 
-        ImGui.TextDisabled("Quiet is always a button. Lanterns may send themselves. One packed write per send.");
+        ImGui.TextDisabled("Quiet is always a button. Lanterns may send themselves, then taper off as more people agree.");
 
         var friends = cfg.ExcludeFriends;
         if (ImGui.Checkbox("Leave friends out of company", ref friends))

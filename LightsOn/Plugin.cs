@@ -254,8 +254,6 @@ public sealed class Plugin : IDalamudPlugin
     {
         if (!Configuration.OccupancyEnabled)
             return;
-        if (venue.Occupancy?.IsHappening != true)
-            return;
 
         try
         {

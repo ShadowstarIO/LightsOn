@@ -6,15 +6,19 @@ Copy sits between OOC and IC.
 
 | In LightsOn | Meaning |
 | --- | --- |
-| **Lanterns lit** | Enough company on the listed plot, last ~20 minutes |
-| **Wrapped up early** | Hours said open; door and yard look quiet |
-| **Marked open** | Directory hours are on. Not occupancy. |
+| **open?** | Hours say open. No occupancy yet. |
+| **open!** | Enough company. Lanterns lit. |
+| **open~** | Yard and halls don't agree. Split. |
+| **"open"** | Hours say open; the scan looks quiet. |
+| **Lanterns lit** | Enough company on the listed plot, last ~60 minutes |
+| **Quiet halls / yard quiet** | Hours said open; that layer looks empty, last ~45 minutes |
+| **locked** / **locked?** | Public door is shut. `locked?` if interior reports still arrived. |
 | **Extremely busy** / **Some activity** / **Some wandering** | Outdoor pocket liveliness. Not used to rank venues. |
 | **In character** | Role-Playing status seen in range (a chip) |
 
-A **property check** needs the **yard** and the **inside**. Nothing is sent until both are scanned, unless the **door is locked** (then the yard is enough). Either layer with enough company → lanterns lit. Both quiet (or quiet yard + locked) → wrapped up early. Locked + busy yard → lanterns lit.
+Yard and inside list separately. The room counts extra. Either layer can be sent on its own. Quiet is always a button. Lanterns may send themselves after a short watch.
 
-**Apartments and chambers** stay on the list. Occupancy is not checked — shared halls, no private yard.
+**Apartments and chambers** stay on the list. Occupancy is not checked — shared halls, no private yard. `sub` is only for those rooms.
 
 ## Company score (client, per layer)
 
@@ -28,12 +32,12 @@ A **property check** needs the **yard** and the **inside**. Nothing is sent unti
 | **Someone reached out** | tell or party with a patron here | +1 total |
 | **Voices nearby** | say with a patron here | +1 total, off unless enabled |
 
-**Enough company** = score 3 on that layer. Friends and Free Company can be left out. Chat text is never uploaded.
+**Enough company** = score 3 on that layer. Friends and Free Company can be left out. Chat text is never uploaded. Yard scan is about one plot-edge (20 yalms). The room is everyone in the house.
 
 ## Log book
 
-Short, kind, not a review. Only while lanterns are lit, after ~20 minutes on the plot. Fades in 14 days.
+A closed pair: adjective + noun. Only while lanterns are lit, after ~8 minutes on the property (yard and halls are one stay). Fades in 7 days. Cap 12.
 
 ## Cooldowns
 
-One person, one vote per 20-minute public snapshot. Reporter id reset waits 20 minutes. Wrapped-up also needs ~3 minutes on the plot.
+One packed write per send. Same action waits ~45 seconds. Reporter id reset waits 20 minutes. Auto lanterns taper as more unique reporters agree, and stop at six.
