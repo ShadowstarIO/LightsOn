@@ -8,161 +8,185 @@ namespace LightsOn.Windows;
 public sealed class ConfigWindow : Window
 {
     private readonly Plugin plugin;
+    private bool resetArmed;
 
     public ConfigWindow(Plugin plugin)
-        : base("LightsOn · settings###LightsOnConfig")
+        : base("LightsOn · Settings###LightsOnConfig")
     {
         this.plugin = plugin;
-        Size = new Vector2(500, 640);
+        Size = new Vector2(500, 700);
         SizeCondition = ImGuiCond.FirstUseEver;
         SizeConstraints = new WindowSizeConstraints
         {
-            MinimumSize = new Vector2(420, 400),
-            MaximumSize = new Vector2(660, 900),
+            MinimumSize = new Vector2(420, 420),
+            MaximumSize = new Vector2(660, 980),
         };
     }
 
     public override void Draw()
     {
         var cfg = plugin.Configuration;
-        UiTheme.Section("Connection");
+
+        UiTheme.Section("What the Lantern Reads");
+        Line("Patrons", "People in the area. 1 each, cap 3.");
+        Line("IC", "Role-Playing / in character. +1.");
+        Line("Party Finder", "Looking for Party is up. +1.");
+        Line("Melding", "This status is on a player. +1. How they use it is their business.");
+        Line("Glances", "You looked at someone, they looked at you, or they looked at each other. +1 total.");
+        Line("Contact", "Tell or party chat with a patron here. +1 total.");
+        Line("Voices", "Say with a patron here. Off unless you turn it on. +1 total.");
+        ImGui.TextDisabled("Enough company = score 3 on that layer. Yard is about one plot-edge. The room is everyone inside.");
+
+        UiTheme.Gap();
+        ImGui.Separator();
+        UiTheme.Section("Settings");
+
         var listings = cfg.ListingsOnly;
-        if (ImGui.Checkbox("Listings only", ref listings))
+        if (ImGui.Checkbox("Listings Only", ref listings))
         {
             cfg.ListingsOnly = listings;
             cfg.Save();
             _ = plugin.RefreshVenues(true);
         }
-        ImGui.TextDisabled("On: hours only, nothing is fetched or sent. Off: occupancy is used.");
-
-        ImGui.Separator();
-        UiTheme.Section("Reports");
-        ImGui.TextWrapped(Copy.ReportsBlurb);
+        UiTheme.Hint("Hours only. Occupancy is not fetched or sent.");
 
         var optIn = cfg.ReportOptIn;
         if (cfg.ListingsOnly)
             ImGui.BeginDisabled();
-        if (ImGui.Checkbox("Send reports", ref optIn))
+        if (ImGui.Checkbox("Send Reports", ref optIn))
         {
             cfg.SetReportOptIn(optIn);
             cfg.HasSeenWelcome = true;
             cfg.Save();
         }
+        UiTheme.Hint("Nothing is sent until this is on. Names and counts never leave your machine. Quiet is always a button.");
 
         var auto = cfg.AutoHappening;
-        if (ImGui.Checkbox("Auto lanterns when the scan is enough", ref auto))
+        if (ImGui.Checkbox("Auto Lanterns", ref auto))
         {
             cfg.AutoHappening = auto;
             cfg.Save();
         }
+        UiTheme.Hint("Sends lanterns when the scan is enough. Quiet is never automatic. Tapers off as more people agree.");
         if (cfg.ListingsOnly)
             ImGui.EndDisabled();
 
         var prompt = cfg.PromptOnEnter;
-        if (ImGui.Checkbox("Open Current plot when you walk onto an open listed venue", ref prompt))
+        if (ImGui.Checkbox("Open Plot Window On Enter", ref prompt))
         {
             cfg.PromptOnEnter = prompt;
             cfg.Save();
         }
+        UiTheme.Hint("Opens Current Plot when you walk onto an open listed venue.");
 
-        ImGui.TextDisabled("Quiet is always a button. Lanterns may send themselves, then taper off as more people agree.");
-
-        var friends = cfg.ExcludeFriends;
-        if (ImGui.Checkbox("Leave friends out of company", ref friends))
+        var closeLeave = cfg.ClosePlotOnLeave;
+        if (ImGui.Checkbox("Close Plot Window On Leave", ref closeLeave))
         {
-            cfg.ExcludeFriends = friends;
+            cfg.ClosePlotOnLeave = closeLeave;
             cfg.Save();
         }
+        UiTheme.Hint("Closes Current Plot when you leave the property.");
 
-        var fc = cfg.ExcludeFreeCompany;
-        if (ImGui.Checkbox("Leave Free Company out of company", ref fc))
-        {
-            cfg.ExcludeFreeCompany = fc;
-            cfg.Save();
-        }
-
-        var status = cfg.UseStatusSignals;
-        if (ImGui.Checkbox("Count in-character / seeking company / at the bench as extra company", ref status))
-        {
-            cfg.UseStatusSignals = status;
-            cfg.Save();
-        }
-
-        var glance = cfg.UseGlanceSignals;
-        if (ImGui.Checkbox("Count a glance (looking at / looked at) as extra company", ref glance))
-        {
-            cfg.UseGlanceSignals = glance;
-            cfg.Save();
-        }
-
-        var chat = cfg.UseChatSignals;
-        if (ImGui.Checkbox("Count tells and party chat with patrons here as extra company", ref chat))
-        {
-            cfg.UseChatSignals = chat;
-            cfg.Save();
-        }
-
-        var say = cfg.UseSaySignals;
-        if (ImGui.Checkbox("Count say with patrons here (voices nearby)", ref say))
-        {
-            cfg.UseSaySignals = say;
-            cfg.Save();
-        }
-
-        ImGui.Separator();
-        UiTheme.Section("Log book");
-        ImGui.TextWrapped(Copy.LogBookHint);
-        var book = cfg.AllowLogBook;
-        if (ImGui.Checkbox("Allow log-book notes", ref book))
-        {
-            cfg.AllowLogBook = book;
-            cfg.Save();
-        }
-
-        ImGui.Separator();
-        UiTheme.Section("Outdoors");
-        ImGui.TextWrapped(Copy.OutdoorsHint);
-        var outdoors = cfg.NoteOutdoorScenes;
-        if (ImGui.Checkbox("Note outdoor scenes", ref outdoors))
-        {
-            cfg.NoteOutdoorScenes = outdoors;
-            cfg.Save();
-        }
-
-        ImGui.Separator();
-        UiTheme.Section("What the lantern reads");
-        Line("Patron", "Another person on the plot. 1 each, cap 3.");
-        Line("In character", "Role-Playing status. +1.");
-        Line("Seeking company", "Looking for Party / recruiting. +1.");
-        Line("At the bench", "Melding Materia. +1.");
-        Line("A glance", "You or a patron has the other targeted. +1 total.");
-        Line("Someone reached out", "Tell or party chat with a patron here. +1 total.");
-        Line("Voices nearby", "Say with a patron here. Off unless you turn it on. +1 total.");
-        ImGui.TextDisabled("Enough company = score 3 on that layer. Yard scan is about one plot-edge (20 yalms). The room is everyone in the house.");
-
-        ImGui.Separator();
-        UiTheme.Section("Reporter id");
-        ImGui.TextWrapped("Random. Not your character. After a reset, reports wait 20 minutes.");
-        ImGui.TextDisabled(ShortId(cfg.ReporterId));
-        if (ImGui.Button("Reset reporter id"))
-        {
-            cfg.ResetReporterId();
-            cfg.Save();
-        }
-        var lockLeft = cfg.ReporterResetLockRemaining;
-        if (lockLeft > TimeSpan.Zero)
-        {
-            var mins = Math.Max(1, (int)Math.Ceiling(lockLeft.TotalMinutes));
-            ImGui.TextColored(UiTheme.Amber, $"Reports locked for {mins} more minute{(mins == 1 ? "" : "s")}.");
-        }
-
-        ImGui.Separator();
         var open = cfg.OpenUiOnLoad;
-        if (ImGui.Checkbox("Open window on login", ref open))
+        if (ImGui.Checkbox("Open On Login", ref open))
         {
             cfg.OpenUiOnLoad = open;
             cfg.Save();
         }
+        UiTheme.Hint("Opens the main window when you log in.");
+
+        var friends = cfg.ExcludeFriends;
+        if (ImGui.Checkbox("Leave Friends Out", ref friends))
+        {
+            cfg.ExcludeFriends = friends;
+            cfg.Save();
+        }
+        UiTheme.Hint("Friends are not counted as company.");
+
+        var fc = cfg.ExcludeFreeCompany;
+        if (ImGui.Checkbox("Leave Free Company Out", ref fc))
+        {
+            cfg.ExcludeFreeCompany = fc;
+            cfg.Save();
+        }
+        UiTheme.Hint("Free Company members are not counted as company.");
+
+        var status = cfg.UseStatusSignals;
+        if (ImGui.Checkbox("Count IC, Party Finder, and Melding", ref status))
+        {
+            cfg.UseStatusSignals = status;
+            cfg.Save();
+        }
+        UiTheme.Hint("Each of these statuses on a patron is extra company.");
+
+        var glance = cfg.UseGlanceSignals;
+        if (ImGui.Checkbox("Count Glances", ref glance))
+        {
+            cfg.UseGlanceSignals = glance;
+            cfg.Save();
+        }
+        UiTheme.Hint("Looking at / looked at a patron. +1 total.");
+
+        var chat = cfg.UseChatSignals;
+        if (ImGui.Checkbox("Count Contact", ref chat))
+        {
+            cfg.UseChatSignals = chat;
+            cfg.Save();
+        }
+        UiTheme.Hint("Tell or party chat with a patron here. +1 total.");
+
+        var say = cfg.UseSaySignals;
+        if (ImGui.Checkbox("Count Voices", ref say))
+        {
+            cfg.UseSaySignals = say;
+            cfg.Save();
+        }
+        UiTheme.Hint("Say with a patron here. Off by default.");
+
+        var book = cfg.AllowLogBook;
+        if (ImGui.Checkbox("Allow Log Book", ref book))
+        {
+            cfg.AllowLogBook = book;
+            cfg.Save();
+        }
+        UiTheme.Hint("Short pair from two lists while lanterns are lit, after a wait on the property.");
+
+        var outdoors = cfg.NoteOutdoorScenes;
+        if (ImGui.Checkbox("Note Outdoor Scenes", ref outdoors))
+        {
+            cfg.NoteOutdoorScenes = outdoors;
+            cfg.Save();
+        }
+        UiTheme.Hint("Short-range outdoor pockets. Not a whole city. Friends and Free Company can be left out.");
+
+        UiTheme.Gap();
+        ImGui.Separator();
+        UiTheme.Section("Reporter ID");
+        UiTheme.Hint("Random. Not your character.");
+        ImGui.TextUnformatted(cfg.ReporterId);
+        ImGui.SameLine();
+        var lockLeft = cfg.ReporterResetLockRemaining;
+        if (lockLeft > TimeSpan.Zero)
+        {
+            var mins = Math.Max(1, (int)Math.Ceiling(lockLeft.TotalMinutes));
+            ImGui.BeginDisabled();
+            ImGui.SmallButton($"Locked {mins}m");
+            ImGui.EndDisabled();
+            resetArmed = false;
+        }
+        else if (resetArmed)
+        {
+            if (ImGui.SmallButton("Confirm Reset"))
+            {
+                cfg.ResetReporterId();
+                cfg.Save();
+                resetArmed = false;
+            }
+        }
+        else if (ImGui.SmallButton("Reset ID"))
+            resetArmed = true;
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip("Reports and notes pause for 20 minutes after a reset.");
     }
 
     private static void Line(string title, string body)
@@ -171,7 +195,4 @@ public sealed class ConfigWindow : Window
         ImGui.SameLine();
         ImGui.TextWrapped(body);
     }
-
-    private static string ShortId(string id)
-        => id.Length <= 12 ? id : id[..8] + "…" + id[^4..];
 }

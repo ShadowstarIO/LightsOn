@@ -6,7 +6,7 @@ namespace LightsOn;
 [Serializable]
 public sealed class Configuration : IPluginConfiguration
 {
-    public int Version { get; set; } = 4;
+    public int Version { get; set; } = 5;
 
     public bool OpenUiOnLoad { get; set; }
     public bool ReportOptIn { get; set; }
@@ -15,6 +15,7 @@ public sealed class Configuration : IPluginConfiguration
     public bool ExcludeFreeCompany { get; set; } = true;
     public bool AutoHappening { get; set; } = true;
     public bool PromptOnEnter { get; set; } = true;
+    public bool ClosePlotOnLeave { get; set; } = true;
     public bool AllowLogBook { get; set; } = true;
     public bool UseStatusSignals { get; set; } = true;
     public bool UseGlanceSignals { get; set; } = true;

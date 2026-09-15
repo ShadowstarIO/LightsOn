@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
@@ -9,6 +10,12 @@ namespace LightsOn.Windows;
 
 internal static class VenueView
 {
+    private static string adjFilter = "";
+    private static string nounFilter = "";
+    private static int adjIdx;
+    private static int nounIdx;
+    private static string? logFor;
+
     public static void Draw(Plugin plugin, VenueListing venue, bool currentPlot)
     {
         var loc = venue.Location;
@@ -17,11 +24,19 @@ internal static class VenueView
         var here = HousingReader.Read();
 
         ImGui.TextWrapped(venue.Name ?? "");
-        if (!currentPlot)
+        if (currentPlot)
         {
             ImGui.SameLine();
-            if (ImGui.SmallButton("Pop out"))
-                plugin.OpenPlotWindow();
+            if (ImGui.SmallButton("Refresh"))
+                _ = plugin.RefreshVenue(venue);
+        }
+        else
+        {
+            ImGui.SameLine();
+            if (ImGui.SmallButton("Pop Out"))
+                plugin.TogglePlotWindow();
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(plugin.PlotUiOpen ? "Close the plot window." : "Open the plot window.");
         }
 
         var lean = Lean(occ);
@@ -30,14 +45,14 @@ internal static class VenueView
         ImGui.TextDisabled(venue.HoursLine);
 
         if (onPlot)
-            ImGui.TextWrapped($"On this plot · {(here.Inside ? "inside" : "outside")} · {loc?.Address ?? here.Summary}");
+            ImGui.TextWrapped($"On This Plot · {(here.Inside ? "inside" : "outside")} · {loc?.Address ?? here.Summary}");
         else
         {
             ImGui.TextWrapped(loc?.Address ?? "");
             if (loc is not null && Lifestream.Installed() && Reach.CanVisitWorld(loc.World))
             {
                 ImGui.SameLine();
-                if (ImGui.SmallButton("Travel to"))
+                if (ImGui.SmallButton("Travel"))
                 {
                     try { Lifestream.Go(loc); }
                     catch (Exception ex) { Plugin.Log.Verbose(ex, "Lifestream"); }
@@ -45,7 +60,7 @@ internal static class VenueView
             }
         }
 
-        ImGui.TextDisabled(FlagsLine(venue));
+        DrawLinks(venue);
         var story = venue.DescriptionText;
         if (story.Length > 0)
         {
@@ -60,6 +75,31 @@ internal static class VenueView
         DrawLogBook(plugin, venue, onPlot);
     }
 
+    private static void DrawLinks(VenueListing venue)
+    {
+        ImGui.TextDisabled(FlagsLine(venue));
+        if (ImGui.SmallButton("Listing"))
+            OpenUrl(Copy.DirectoryUrl);
+        if (!string.IsNullOrWhiteSpace(venue.Website))
+        {
+            ImGui.SameLine();
+            if (ImGui.SmallButton("Website"))
+                OpenUrl(venue.Website);
+        }
+        if (!string.IsNullOrWhiteSpace(venue.Discord))
+        {
+            ImGui.SameLine();
+            if (ImGui.SmallButton("Discord"))
+                OpenUrl(venue.Discord);
+        }
+    }
+
+    private static void OpenUrl(string url)
+    {
+        try { Dalamud.Utility.Util.OpenLink(url); }
+        catch (Exception ex) { Plugin.Log.Verbose(ex, "Open link"); }
+    }
+
     private static void DrawCheck(Plugin plugin, VenueListing venue, bool onPlot, HousingAddress here)
     {
         if (!NearbyScan.OccupancyEligible(venue))
@@ -70,7 +110,7 @@ internal static class VenueView
 
         if (!onPlot)
         {
-            ImGui.TextDisabled("Travel to the plot to scan or send.");
+            ImGui.TextDisabled("Go to this plot to scan.");
             return;
         }
 
@@ -86,6 +126,8 @@ internal static class VenueView
         }
         if (scanWait > TimeSpan.Zero)
             ImGui.EndDisabled();
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+            ImGui.SetTooltip("Local scan. Quiet is always a button. Lanterns may send themselves.");
 
         ImGui.SameLine();
         var canSend = plugin.CanSend;
@@ -108,17 +150,8 @@ internal static class VenueView
         {
             var observe = DateTimeOffset.UtcNow - plugin.Session.ObserveSince;
             if (observe < TimeSpan.FromSeconds(Limits.ObserveSeconds))
-                ImGui.TextDisabled($"watching {Limits.ObserveSeconds - (int)observe.TotalSeconds}s for extra signals");
+                ImGui.TextDisabled($"Watching {Limits.ObserveSeconds - (int)observe.TotalSeconds}s");
         }
-
-        if (!canSend)
-            ImGui.TextDisabled(plugin.Configuration.ListingsOnly
-                ? "Listings only is on."
-                : plugin.Configuration.ReporterResetLockRemaining > TimeSpan.Zero
-                    ? "Reports locked after reporter id reset."
-                    : "Settings → Send reports.");
-        else
-            ImGui.TextDisabled("Scan is local. Quiet is always a button. Lanterns may send themselves.");
     }
 
     private static void DrawSend(Plugin plugin, VenueListing venue, string label, string kind, bool canSend, bool inside)
@@ -139,8 +172,6 @@ internal static class VenueView
             ImGui.EndDisabled();
     }
 
-    private static string? logFor;
-
     private static void DrawReportLog(Plugin plugin, VenueListing venue)
     {
         if (logFor != venue.Id)
@@ -155,6 +186,7 @@ internal static class VenueView
         var interior = log.Where(e => e.Inside).Take(Limits.ReportCap).ToList();
         var locked = log.Any(e => e.DoorLocked) || venue.Occupancy.DoorLocked;
 
+        UiTheme.Gap();
         ImGui.Separator();
         ImGui.TextColored(UiTheme.Teal, $"Exterior  {Score(exterior)}");
         if (exterior.Count == 0)
@@ -162,41 +194,35 @@ internal static class VenueView
         foreach (var row in exterior)
             ImGui.TextWrapped(EventLine(row));
 
+        UiTheme.Gap();
         ImGui.Separator();
         var lockMark = locked && interior.Count > 0 ? "  locked?" : locked ? "  locked" : "";
         ImGui.TextColored(UiTheme.Teal, $"Interior{lockMark}  {Score(interior)}");
         if (interior.Count == 0)
-            ImGui.TextDisabled(locked ? "locked. No interior reports yet." : "None yet.");
+            ImGui.TextDisabled(locked ? "Locked. No interior reports yet." : "None yet.");
         foreach (var row in interior)
             ImGui.TextWrapped(EventLine(row));
     }
 
-    private static int adjIdx;
-    private static int nounIdx;
-
     private static void DrawLogBook(Plugin plugin, VenueListing venue, bool onPlot)
     {
+        UiTheme.Gap();
         ImGui.Separator();
-        UiTheme.Section("Log book", true);
-        ImGui.TextWrapped(Copy.LogBookHint);
-        foreach (var note in venue.Notes.Take(12))
-            ImGui.TextWrapped($"{Age(note.At)}: \"{note.Text}\"");
-        if (venue.Notes.Count == 0)
-            ImGui.TextDisabled("No notes yet.");
+        UiTheme.Section("Log Book", true);
 
         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X * 0.32f);
-        ImGui.Combo("##adj", ref adjIdx, Copy.LogAdjectives, Copy.LogAdjectives.Length);
+        UiTheme.SearchCombo("##adj", ref adjIdx, Copy.LogAdjectives, ref adjFilter);
         ImGui.SameLine();
         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X * 0.40f);
-        ImGui.Combo("##noun", ref nounIdx, Copy.LogNouns, Copy.LogNouns.Length);
+        UiTheme.SearchCombo("##noun", ref nounIdx, Copy.LogNouns, ref nounFilter);
 
+        var wait = TimeSpan.FromMinutes(Limits.LogBookDwellMinutes) - plugin.Session.OnPlot;
         var ready = onPlot && plugin.Configuration.AllowLogBook && plugin.CanSend
                     && venue.Occupancy?.IsHappening == true
-                    && plugin.Session.OnPlot >= TimeSpan.FromMinutes(Limits.LogBookDwellMinutes);
+                    && wait <= TimeSpan.Zero;
         ImGui.SameLine();
         if (!ready)
             ImGui.BeginDisabled();
-        var wait = TimeSpan.FromMinutes(Limits.LogBookDwellMinutes) - plugin.Session.OnPlot;
         var label = ready
             ? "+ Note"
             : onPlot && venue.Occupancy?.IsHappening == true && wait > TimeSpan.Zero
@@ -206,10 +232,22 @@ internal static class VenueView
             _ = plugin.LeaveNoteUi(venue, Copy.LogLine(adjIdx, nounIdx));
         if (!ready)
             ImGui.EndDisabled();
-        if (!onPlot)
-            ImGui.TextDisabled("Go to the plot to leave a note.");
-        else if (venue.Occupancy?.IsHappening != true)
-            ImGui.TextDisabled("Log book opens when lanterns are lit.");
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+        {
+            if (!onPlot)
+                ImGui.SetTooltip("Go to the plot to leave a note.");
+            else if (venue.Occupancy?.IsHappening != true)
+                ImGui.SetTooltip("Log book opens when lanterns are lit.");
+            else if (wait > TimeSpan.Zero)
+                ImGui.SetTooltip($"Stay about {Limits.LogBookDwellMinutes} minutes on the property.");
+            else
+                ImGui.SetTooltip("Leave this pair in the log book.");
+        }
+
+        if (venue.Notes.Count == 0)
+            ImGui.TextDisabled("No notes yet.");
+        foreach (var note in venue.Notes.Take(12))
+            ImGui.TextWrapped($"{Age(note.At)}: \"{note.Text}\"");
     }
 
     private static string FmtWait(TimeSpan wait)
@@ -241,10 +279,10 @@ internal static class VenueView
         occ.InteriorHappening * 2 + occ.ExteriorHappening
         - occ.InteriorWrapped * 2 - occ.ExteriorWrapped;
 
-    private static string SummaryStatus(OccupancySnapshot occ, System.Collections.Generic.IReadOnlyList<OccupancyEvent> log, int lean)
+    private static string SummaryStatus(OccupancySnapshot occ, IReadOnlyList<OccupancyEvent> log, int lean)
     {
         var head = lean > 0 ? Copy.Happening : lean < 0 ? Copy.Wrapped : occ.HappeningReports + occ.WrappedUpReports == 0 ? Copy.NoReport : "Split";
-        var bits = new System.Collections.Generic.List<string> { head };
+        var bits = new List<string> { head };
         var locked = occ.DoorLocked || log.Any(e => e.DoorLocked);
         var hasIn = log.Any(e => e.Inside) || occ.InteriorHappening + occ.InteriorWrapped > 0;
         if (locked && hasIn)
@@ -264,15 +302,11 @@ internal static class VenueView
 
     private static string FlagsLine(VenueListing venue)
     {
-        var bits = new System.Collections.Generic.List<string> { venue.Sfw ? "SFW" : "NSFW" };
+        var bits = new List<string> { venue.Sfw ? "SFW" : "NSFW" };
         if (venue.Hiring)
             bits.Add("Hiring");
         if (venue.Tags is { Count: > 0 })
             bits.AddRange(venue.Tags.Take(4));
-        if (!string.IsNullOrWhiteSpace(venue.Website))
-            bits.Add("Website");
-        if (!string.IsNullOrWhiteSpace(venue.Discord))
-            bits.Add("Discord");
         return string.Join(" · ", bits);
     }
 
@@ -281,7 +315,7 @@ internal static class VenueView
         var what = row.Inside
             ? (row.Kind == "happening" ? Copy.Happening : Copy.Wrapped)
             : (row.Kind == "happening" ? Copy.YardBusy : Copy.YardQuiet);
-        var bits = new System.Collections.Generic.List<string> { what };
+        var bits = new List<string> { what };
         if (row.DoorLocked)
             bits.Add("locked");
         if (row.ThresholdMet)
@@ -289,7 +323,7 @@ internal static class VenueView
         if (row.Voices)
             bits.Add("voices");
         if (row.Glance)
-            bits.Add("glance");
+            bits.Add("glances");
         if (row.Music)
             bits.Add("music");
         if (!row.ThresholdMet && row.Kind != "happening")
@@ -297,7 +331,7 @@ internal static class VenueView
         return $"{Age(row.At)}  {string.Join(" · ", bits)}";
     }
 
-    private static string Score(System.Collections.Generic.List<OccupancyEvent> rows)
+    private static string Score(List<OccupancyEvent> rows)
     {
         var up = rows.Count(e => e.Kind == "happening");
         var down = rows.Count(e => e.Kind == "wrapped_up");

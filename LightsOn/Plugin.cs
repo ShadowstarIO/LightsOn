@@ -30,7 +30,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
 
-    public const string Version = "0.0.3.9";
+    public const string Version = "0.0.4.0";
     private const string CommandName = "/lightson";
     private const string CommandAlias = "/lon";
 
@@ -61,7 +61,7 @@ public sealed class Plugin : IDalamudPlugin
         Configuration.Save();
 
         http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.3.9 (+https://github.com/XozaShadow/LightsOn)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.4.0 (+https://github.com/XozaShadow/LightsOn)");
         directory = new DirectoryClient(http);
         occupancy = new OccupancyClient(http);
 
@@ -74,7 +74,7 @@ public sealed class Plugin : IDalamudPlugin
 
         CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
-            HelpMessage = "LightsOn. /lon here · /lon config",
+            HelpMessage = "LightsOn. /lon here · /lon plot · /lon config",
         });
         try
         {
@@ -119,9 +119,11 @@ public sealed class Plugin : IDalamudPlugin
 
     public void ToggleConfigUi() => configWindow.Toggle();
     public void ToggleMainUi() => mainWindow.Toggle();
+    public void TogglePlotWindow() => plotWindow.IsOpen = !plotWindow.IsOpen;
     public void OpenPlotWindow() => plotWindow.IsOpen = true;
     public void SelectVenue(string id) => mainWindow.Select(id);
     public bool MainUiOpen => mainWindow.IsOpen;
+    public bool PlotUiOpen => plotWindow.IsOpen;
     public void Notify(string text) => Chat.Print("[LightsOn] " + text);
     public bool CanSend => SendBlock() is null;
 
@@ -147,12 +149,6 @@ public sealed class Plugin : IDalamudPlugin
         if (result.OnPlot)
             Session.Check.Absorb(result);
         return result;
-    }
-
-    public void MarkDoorLocked()
-    {
-        Session.Check.MarkLocked();
-        ActionLine = "Door marked locked on this plot.";
     }
 
     public async Task RefreshVenues(bool force)
@@ -229,6 +225,13 @@ public sealed class Plugin : IDalamudPlugin
             Log.Warning(ex, "Listing fetch failed");
             StatusLine = "Could not load listings.";
         }
+    }
+
+    public async Task RefreshVenue(VenueListing venue)
+    {
+        await RefreshOccupancy().ConfigureAwait(true);
+        await RefreshLog(venue).ConfigureAwait(true);
+        await RefreshNotes(venue).ConfigureAwait(true);
     }
 
     public async Task RefreshOccupancy()
@@ -551,8 +554,12 @@ public sealed class Plugin : IDalamudPlugin
         var key = NearbyScan.PlotKey();
         if (key.Length == 0)
         {
-            if (!HousingReader.Read().Inside && Session.PlotKey.Length > 0)
+            if (Session.PlotKey.Length > 0)
+            {
                 Session.ResetPlot("");
+                if (Configuration.ClosePlotOnLeave)
+                    plotWindow.IsOpen = false;
+            }
             return;
         }
 
@@ -561,8 +568,12 @@ public sealed class Plugin : IDalamudPlugin
             var arrived = Session.PlotKey.Length == 0;
             Session.ResetPlot(key);
             Session.Hop = NearbyScan.ListedHere(Venues);
-            if (arrived && Configuration.PromptOnEnter
-                && Session.Hop is { Resolution.IsNow: true })
+            if (Session.Hop is null)
+            {
+                if (Configuration.ClosePlotOnLeave)
+                    plotWindow.IsOpen = false;
+            }
+            else if (arrived && Configuration.PromptOnEnter && Session.Hop.Resolution?.IsNow == true)
                 plotWindow.IsOpen = true;
         }
         else
@@ -723,7 +734,7 @@ public sealed class Plugin : IDalamudPlugin
                 Notify("/lon refresh — reload listings");
                 break;
             case "plot":
-                OpenPlotWindow();
+                TogglePlotWindow();
                 break;
             case "config":
                 ToggleConfigUi();

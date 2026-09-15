@@ -43,6 +43,11 @@ internal sealed class DirectoryClient
                 venue.Location.DataCenter ??= "";
                 venue.Location.World ??= "";
                 venue.Location.District ??= "";
+                var zone = HousingReader.ResolveDistrict(venue.Location.District);
+                if (HousingReader.IsKnownDistrict(zone))
+                    venue.Location.District = zone;
+                if (venue.Location.RoomNo == 0)
+                    venue.Location.Plot = HousingReader.CanonicalPlot(venue.Location.Plot, venue.Location.Subdivision);
             }
             venue.Description ??= [];
             venue.Tags ??= [];

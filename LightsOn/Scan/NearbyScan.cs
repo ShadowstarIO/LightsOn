@@ -61,9 +61,9 @@ internal static class NearbyScan
         if (tally.InCharacter)
             bits.Add("in character");
         if (tally.Seeking)
-            bits.Add("seeking company");
+            bits.Add("Party Finder");
         if (tally.Bench)
-            bits.Add("at the bench");
+            bits.Add("melding");
         if (tally.Glance)
             bits.Add("a glance");
         if (tally.Voices)
@@ -263,17 +263,19 @@ internal static class NearbyScan
         var loc = venue.Location;
         if (loc is null)
             return false;
-        if (!string.Equals(CurrentWorldName(), loc.World, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(CurrentWorldName(), loc.World.Trim(), StringComparison.OrdinalIgnoreCase))
             return false;
 
         var here = HousingReader.Read();
         if (!here.OnPlot)
             return false;
-        if (here.Ward != loc.Ward || here.Plot != loc.Plot)
+        if (here.Ward != loc.Ward)
+            return false;
+        var venuePlot = HousingReader.CanonicalPlot(loc.Plot, loc.Subdivision && loc.RoomNo == 0);
+        if (here.Plot != venuePlot)
             return false;
         if (here.District.Length > 0 && loc.District.Length > 0
-            && HousingReader.IsKnownDistrict(here.District)
-            && !string.Equals(here.District, loc.District, StringComparison.OrdinalIgnoreCase))
+            && !HousingReader.SameDistrict(here.District, loc.District))
             return false;
         return true;
     }

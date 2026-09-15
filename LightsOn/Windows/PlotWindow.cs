@@ -10,7 +10,7 @@ public sealed class PlotWindow : Window
     private readonly Plugin plugin;
 
     public PlotWindow(Plugin plugin)
-        : base("LightsOn · current plot###LightsOnPlot")
+        : base("LightsOn · Current Plot###LightsOnPlot")
     {
         this.plugin = plugin;
         Size = new Vector2(420, 560);
@@ -29,16 +29,17 @@ public sealed class PlotWindow : Window
         {
             ImGui.TextWrapped(plugin.Session.HereLine);
             ImGui.TextDisabled("Not on a listed plot.");
-            if (ImGui.SmallButton("Open full view"))
+            if (ImGui.SmallButton("Full View"))
                 plugin.ToggleMainUi();
             return;
         }
 
-        if (ImGui.SmallButton("Open full view"))
+        if (ImGui.SmallButton("Full View"))
         {
             plugin.SelectVenue(venue.Id);
             plugin.ToggleMainUi();
         }
+        UiTheme.Gap();
         ImGui.Separator();
         VenueView.Draw(plugin, venue, true);
     }

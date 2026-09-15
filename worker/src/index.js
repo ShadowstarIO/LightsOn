@@ -6,7 +6,7 @@ const NOTE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const NOTE_RATE_MS = 24 * 60 * 60 * 1000;
 const MAX_BODY = 8 * 1024;
 const VENUES_URL = "https://api.ffxivvenues.com/venue";
-const UA = "LightsOn/0.0.3.9 (+https://github.com/XozaShadow/LightsOn)";
+const UA = "LightsOn/0.0.4.0 (+https://github.com/XozaShadow/LightsOn)";
 const TIER_RANK = { extremely_busy: 3, some_activity: 2, some_wandering: 1 };
 const venueCache = new Map();
 let migrateTried = false;
@@ -472,8 +472,8 @@ async function readJson(request) {
   }
 }
 
-const LOG_ADJ = ["Kind", "Warm", "Quiet", "Lively", "Great", "Fine", "Friendly", "Soft", "Bright", "Worth"];
-const LOG_NOUN = ["host", "music", "crowd", "corner", "wait", "drinks", "floor", "door", "walk", "hall"];
+const LOG_ADJ = ["Warm", "Kind", "Gentle", "Friendly", "Cozy", "Calm", "Quiet", "Soft", "Bright", "Lively", "Sweet", "Lovely", "Nice", "Easy", "Smooth", "Mellow", "Pleasant", "Welcoming", "Relaxed", "Cheerful", "Peaceful", "Inviting", "Fine", "Great", "Good", "Light", "Fresh", "Happy", "Steady", "Open", "Fair", "Polite"];
+const LOG_NOUN = ["host", "staff", "welcome", "music", "crowd", "room", "hall", "space", "vibe", "lights", "mood", "company", "energy", "scene", "bar", "floor", "stage", "drinks", "mix", "chat", "seats", "corner", "night", "air", "door", "yard", "wait", "walk", "set", "entry"];
 const LOG_PHRASES = new Set(LOG_ADJ.flatMap((a) => LOG_NOUN.map((n) => `${a} ${n}`)));
 
 function sanitizeNote(raw) {
@@ -516,14 +516,32 @@ function plotLooksValid(proof) {
   return Number.isInteger(ward) && ward >= 1 && ward <= 30 && Number.isInteger(plot) && plot >= 1 && plot <= 60;
 }
 
+function canonDistrict(s) {
+  const t = String(s || "").toLowerCase();
+  if (t.includes("lavender") || t.includes("lily")) return "lavender beds";
+  if (t.includes("goblet") || t.includes("sultana")) return "goblet";
+  if (t.includes("shirogane") || t.includes("kobai")) return "shirogane";
+  if (t.includes("empyreum") || t.includes("ingleside")) return "empyreum";
+  if (t.includes("mist") || t.includes("topmast")) return "mist";
+  return t.trim();
+}
+
+function canonPlot(plot, sub) {
+  const p = Number(plot);
+  if (Number.isInteger(p) && p >= 1 && p <= 30 && sub) return p + 30;
+  return p;
+}
+
 function plotMatches(venue, proof) {
   if (!eq(venue.world, proof.world))
     return false;
-  if (venue.district && proof.district && !eq(venue.district, proof.district))
+  const vd = canonDistrict(venue.district);
+  const pd = canonDistrict(proof.district);
+  if (vd && pd && vd !== pd)
     return false;
   if (Number(venue.ward) !== Number(proof.ward))
     return false;
-  if (Number(venue.plot) !== Number(proof.plot))
+  if (canonPlot(venue.plot, venue.subdivision) !== canonPlot(proof.plot, proof.subdivision))
     return false;
   return true;
 }
