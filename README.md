@@ -20,8 +20,6 @@ https://raw.githubusercontent.com/XozaShadow/LightsOn/main/repo.json
 
 Plugin installer → settings → experimental → custom repositories → add that URL. Enable **Get plugin testing versions**, then install LightsOn.
 
-Occupancy host: `https://REDACTED`
-
 ## What it sends
 
 Reports are **opt-in**. Nothing goes out until you turn **Send reports** on.
