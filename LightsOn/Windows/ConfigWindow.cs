@@ -161,12 +161,12 @@ public sealed class ConfigWindow : Window
         UiTheme.Hint("Short pair from two lists while lanterns are lit, after a wait on the property.");
 
         var outdoors = cfg.NoteOutdoorScenes;
-        if (ImGui.Checkbox("Note Outdoor Scenes", ref outdoors))
+        if (ImGui.Checkbox("Report Outdoor Scenes", ref outdoors))
         {
             cfg.NoteOutdoorScenes = outdoors;
             cfg.Save();
         }
-        UiTheme.Hint("Short-range street pockets. Audit and stay, or wait about 10 minutes. Busier scenes note sooner.");
+        UiTheme.Hint("Street pockets. Audit and stay, or wait about 10 minutes. Same area waits 5 minutes.");
 
         UiTheme.Gap();
         ImGui.Separator();

@@ -43,7 +43,7 @@ Two lists, not free-form. Pairs look like *Kind Crowd* or *Warm Food*. One note 
 
 ## Outdoors
 
-Short-range street pockets (~20 yalms), not a whole zone. **Audit** and stay in the area for about a minute (busier scenes finish sooner), or wait about ten minutes with outdoor notes on. Private gatherings can be kept off the list. The public list is about twenty minutes.
+Street pockets (~40 yalms), not a whole zone. **Audit** and stay near the start point for about a minute (busier scenes finish sooner), or wait about ten minutes with outdoor reports on. Walking away pauses; too far cancels. Same area waits five minutes before another audit. Optional scene tag (RP, Party, Hunt, …). Private gatherings can be kept off the list. Reports last about four hours.
 
 ## Commands
 

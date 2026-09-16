@@ -19,6 +19,7 @@ public sealed class MainWindow : Window
     private string worldFilter = "";
     private int venueFilter;
     private int outdoorFilter;
+    private string outdoorSceneFilter = "";
     private string? selectedId;
     private string? selectedZone;
     private static readonly string[] StatusFilters = ["All", "Lanterns Lit", "Open Now", "Vacant", "No Data"];
@@ -76,11 +77,13 @@ public sealed class MainWindow : Window
         var pending = plugin.Session.OutdoorPrivate;
         if (pending is null)
             return;
-        ImGui.TextWrapped("Most of the company here looks like friends or Free Company. Is this a private gathering?");
-        if (ImGui.SmallButton("Yes, Private"))
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextWrapped("Mostly friends/FC here. Private gathering?");
+        ImGui.SameLine();
+        if (ImGui.SmallButton("Yes"))
             _ = plugin.TryOutdoor(pending.Scan, true);
         ImGui.SameLine();
-        if (ImGui.SmallButton("No, Public"))
+        if (ImGui.SmallButton("No"))
             _ = plugin.TryOutdoor(pending.Scan, false);
         ImGui.SameLine();
         if (ImGui.SmallButton("Skip"))
@@ -177,14 +180,23 @@ public sealed class MainWindow : Window
             .ToList();
         var zones = rows
             .GroupBy(o => ZoneKey(o))
-            .Select(g => new OutdoorZone(
-                g.Key,
-                g.Max(o => NearbyScan.TierRank(o.Tier)),
-                g.Count(),
-                g.Max(o => o.UpdatedAt ?? DateTimeOffset.MinValue),
-                g.OrderByDescending(o => NearbyScan.TierRank(o.Tier)).ThenByDescending(o => o.UpdatedAt).ToList()))
+            .Select(g =>
+            {
+                var top = g.OrderByDescending(o => NearbyScan.TierRank(o.Tier)).ThenByDescending(o => o.UpdatedAt).First();
+                return new OutdoorZone(
+                    g.Key,
+                    top.World,
+                    string.IsNullOrWhiteSpace(top.Zone) ? top.Place : top.Zone,
+                    top.Place,
+                    NearbyScan.TierRank(top.Tier),
+                    top.Tier,
+                    g.Count(),
+                    g.Max(o => o.UpdatedAt ?? DateTimeOffset.MinValue),
+                    g.OrderByDescending(o => o.UpdatedAt).ToList());
+            })
             .OrderByDescending(z => z.Rank)
             .ThenByDescending(z => z.UpdatedAt)
+            .ThenByDescending(z => z.Count)
             .ToList();
 
         if (selectedZone is not null && zones.All(z => z.Key != selectedZone))
@@ -192,20 +204,21 @@ public sealed class MainWindow : Window
         selectedZone ??= zones.FirstOrDefault()?.Key;
         var picked = zones.FirstOrDefault(z => z.Key == selectedZone);
 
-        var listW = Math.Max(260, ImGui.GetContentRegionAvail().X * 0.42f);
+        var listW = Math.Max(240, ImGui.GetContentRegionAvail().X * 0.40f);
         ImGui.BeginChild("oz-list", new Vector2(listW, -1), true);
         if (zones.Count == 0)
-            ImGui.TextDisabled($"No outdoor scenes noted in the last {Limits.OutdoorListMinutes} minutes.");
+            ImGui.TextDisabled($"No outdoor scenes reported in the last {Limits.OutdoorListHours} hours.");
         foreach (var zone in zones)
         {
-            var top = zone.Pockets[0];
-            ImGui.TextColored(UiTheme.Happening, "·");
+            ImGui.TextColored(UiTheme.TierColor(zone.Tier), "·");
             ImGui.SameLine(0, 6);
-            if (ImGui.Selectable($"{zone.Key}##{zone.Key}", zone.Key == selectedZone))
+            var label = Zone.Line(zone.World, zone.Region, zone.Place);
+            if (ImGui.Selectable($"{label}##{zone.Key}", zone.Key == selectedZone))
                 selectedZone = zone.Key;
             ImGui.SameLine();
-            ImGui.TextColored(UiTheme.Happening, NearbyScan.TierLabel(top.Tier));
-            ImGui.TextDisabled($"{zone.Count} spot{(zone.Count == 1 ? "" : "s")} · {VenueView.Age(zone.UpdatedAt)}");
+            ImGui.TextColored(UiTheme.TierColor(zone.Tier), NearbyScan.TierLabel(zone.Tier));
+            ImGui.SameLine();
+            ImGui.TextDisabled($"{zone.Count}");
         }
         ImGui.EndChild();
 
@@ -214,37 +227,51 @@ public sealed class MainWindow : Window
         if (picked is null)
             ImGui.TextDisabled("Pick a zone.");
         else
-        {
-            ImGui.TextColored(UiTheme.Title, picked.Key);
-            ImGui.TextDisabled(Copy.OutdoorsHint);
-            foreach (var row in picked.Pockets)
-            {
-                UiTheme.Gap();
-                ImGui.Separator();
-                var here = string.Equals(row.Pocket, plugin.Session.PocketKey, StringComparison.Ordinal);
-                ImGui.TextColored(UiTheme.Happening, NearbyScan.TierLabel(row.Tier));
-                ImGui.SameLine();
-                var coords = NearbyScan.PocketCoords(row.Pocket);
-                ImGui.TextWrapped(string.IsNullOrEmpty(coords) ? row.Place : $"{row.Place} {coords}");
-                if (here)
-                {
-                    ImGui.SameLine();
-                    ImGui.TextColored(UiTheme.Amber, "here");
-                }
-                if (row.InCharacter)
-                {
-                    ImGui.SameLine();
-                    ImGui.TextColored(UiTheme.Teal, "IC");
-                }
-                ImGui.TextColored(UiTheme.AgeColor(row.UpdatedAt),
-                    $"{row.Reports} note{(row.Reports == 1 ? "" : "s")} · {VenueView.Age(row.UpdatedAt)}");
-                if (ImGui.SmallButton($"Flag##{row.Pocket}"))
-                    Here.FlagPocket(row.Pocket);
-                if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip("Place a map flag on this pocket. Coarse cell, not a person's feet.");
-            }
-        }
+            DrawOutdoorDetail(picked);
         ImGui.EndChild();
+    }
+
+    private void DrawOutdoorDetail(OutdoorZone picked)
+    {
+        var top = picked.Reports[0];
+        NearbyScan.TryParsePocket(top.Pocket, out _, out var territory, out _, out _);
+        var (_, _, kind) = Zone.Describe(territory);
+        ImGui.TextColored(UiTheme.Title, Zone.Line(picked.World, picked.Region, picked.Place));
+        if (kind.Length > 0)
+            ImGui.TextDisabled(kind);
+        ImGui.Separator();
+        foreach (var row in picked.Reports)
+        {
+            var bits = new List<string> { VenueView.Age(row.UpdatedAt) };
+            var coords = NearbyScan.PocketCoords(row.Pocket);
+            if (coords.Length > 0)
+                bits.Add(coords);
+            bits.Add(NearbyScan.TierLabel(row.Tier));
+            if (!string.IsNullOrWhiteSpace(row.Activity))
+                bits.Add(row.Activity);
+            if (row.InCharacter)
+                bits.Add("IC");
+            if (row.Patrons > 0)
+                bits.Add($"p{Zone.CountLabel(row.Patrons)}");
+            if (row.ZoneCount > 0)
+                bits.Add($"{Zone.CountLabel(row.ZoneCount)} zone");
+            if (row.Voices)
+                bits.Add("voices");
+            if (row.Glance)
+                bits.Add("glances");
+            if (row.Emotes)
+                bits.Add("emotes");
+            if (row.Score > 0)
+                bits.Add($"+{row.Score}");
+            if (string.Equals(row.Pocket, plugin.Session.PocketKey, StringComparison.Ordinal))
+                bits.Add("here");
+            ImGui.TextColored(UiTheme.TierColor(row.Tier), string.Join(" · ", bits));
+            ImGui.SameLine();
+            if (ImGui.SmallButton($"Flag##{row.Pocket}{row.UpdatedAt:o}"))
+                Here.FlagPocket(row.Pocket);
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("Map flag on this pocket. Coarse cell, not a person's feet.");
+        }
     }
 
     private void DrawOutdoorScanBar()
@@ -252,7 +279,9 @@ public sealed class MainWindow : Window
         var onPlot = plugin.Session.PlotKey.Length > 0;
         var watching = plugin.Session.Watching;
         var ready = plugin.Session.WatchReady;
-        var canNote = plugin.Configuration.NoteOutdoorScenes && plugin.CanSend;
+        var canReport = plugin.Configuration.NoteOutdoorScenes && plugin.CanSend;
+        var here = NearbyScan.RunOutdoor(plugin);
+        var auditWait = here.Pocket.Length > 0 ? plugin.Session.OutdoorAuditWait(here.Pocket) : TimeSpan.Zero;
 
         if (watching)
         {
@@ -261,18 +290,23 @@ public sealed class MainWindow : Window
         }
         else
         {
-            var blocked = onPlot;
+            var blocked = onPlot || auditWait > TimeSpan.Zero;
             if (blocked)
                 ImGui.BeginDisabled();
-            if (ImGui.SmallButton("Audit"))
+            var auditLabel = auditWait > TimeSpan.Zero
+                ? $"Audit ({Math.Max(1, (int)Math.Ceiling(auditWait.TotalSeconds))}s)"
+                : "Audit";
+            if (ImGui.SmallButton(auditLabel))
                 plugin.StartOutdoorWatch();
             if (blocked)
                 ImGui.EndDisabled();
             if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
             {
                 ImGui.SetTooltip(onPlot
-                    ? "Outdoor notes are for the street, not plots."
-                    : "Stay in this area. About a minute; busier scenes finish sooner.");
+                    ? "Outdoor reports are for the street, not plots."
+                    : auditWait > TimeSpan.Zero
+                        ? "Same area waits about 5 minutes. A new zone waits 20 seconds."
+                        : "Stay near the start point. About a minute; busier scenes finish sooner.");
             }
         }
         ImGui.SameLine();
@@ -284,24 +318,31 @@ public sealed class MainWindow : Window
         UiTheme.DrawHere(plugin.Session.HereLine, true);
 
         if (!plugin.Configuration.NoteOutdoorScenes)
-            ImGui.TextDisabled("Settings → Note Outdoor Scenes to contribute. You can still read the list.");
+            ImGui.TextDisabled("Settings → Report Outdoor Scenes to contribute. You can still read the list.");
 
         if (watching)
         {
+            ImGui.AlignTextToFramePadding();
             ImGui.TextWrapped(plugin.Session.WatchLine);
             if (ready)
             {
                 var peak = plugin.Session.WatchPeak;
                 var wait = plugin.Session.OutdoorWait(peak.Pocket, peak.Tier);
-                var noteOk = canNote && peak.Tier.Length > 0 && wait <= TimeSpan.Zero;
-                if (!noteOk)
+                var sceneIdx = plugin.Session.OutdoorSceneIdx;
+                ImGui.SameLine();
+                ImGui.SetNextItemWidth(110);
+                if (UiTheme.SearchCombo("##oscene", ref sceneIdx, Copy.OutdoorScenes, ref outdoorSceneFilter))
+                    plugin.Session.OutdoorSceneIdx = sceneIdx;
+                ImGui.SameLine();
+                var reportOk = canReport && peak.Tier.Length > 0 && wait <= TimeSpan.Zero;
+                if (!reportOk)
                     ImGui.BeginDisabled();
                 var label = wait > TimeSpan.Zero
-                    ? $"Note ({Math.Max(1, (int)Math.Ceiling(wait.TotalSeconds))}s)"
-                    : "Note";
+                    ? $"Report ({Math.Max(1, (int)Math.Ceiling(wait.TotalSeconds))}s)"
+                    : "Report";
                 if (ImGui.SmallButton(label))
                     _ = plugin.FinishOutdoorWatch();
-                if (!noteOk)
+                if (!reportOk)
                     ImGui.EndDisabled();
                 ImGui.SameLine();
                 if (ImGui.SmallButton("Skip"))
@@ -439,10 +480,16 @@ public sealed class MainWindow : Window
         if (string.IsNullOrEmpty(query))
             return true;
         return row.Place.Contains(query, StringComparison.OrdinalIgnoreCase)
-               || row.World.Contains(query, StringComparison.OrdinalIgnoreCase);
+               || row.World.Contains(query, StringComparison.OrdinalIgnoreCase)
+               || (row.Zone ?? "").Contains(query, StringComparison.OrdinalIgnoreCase)
+               || (row.Activity ?? "").Contains(query, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static string ZoneKey(OutdoorSnapshot row) => $"{row.World} · {row.Place}";
+    private static string ZoneKey(OutdoorSnapshot row)
+    {
+        var region = string.IsNullOrWhiteSpace(row.Zone) ? row.Place : row.Zone;
+        return $"{row.World}|{region}|{row.Place}";
+    }
 
     private static void PlaceCombo(string id, string preview, List<string> items, string allLabel, ref string filter, ref string picked)
     {
@@ -465,8 +512,12 @@ public sealed class MainWindow : Window
 
     private sealed record OutdoorZone(
         string Key,
+        string World,
+        string Region,
+        string Place,
         int Rank,
+        string Tier,
         int Count,
         DateTimeOffset UpdatedAt,
-        List<OutdoorSnapshot> Pockets);
+        List<OutdoorSnapshot> Reports);
 }

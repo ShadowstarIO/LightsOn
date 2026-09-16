@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Numerics;
 using LightsOn.Api;
 using LightsOn.Scan;
 
@@ -21,6 +22,9 @@ public sealed class Session
     public DateTimeOffset LastOutdoorPost { get; set; }
     public string LastOutdoorPocket { get; set; } = "";
     public string LastOutdoorTier { get; set; } = "";
+    public DateTimeOffset LastAuditAt { get; set; }
+    public string LastAuditPocket { get; set; } = "";
+    public int OutdoorSceneIdx { get; set; }
     public DateTimeOffset ObserveSince { get; set; }
     public DateTimeOffset LastScanAt { get; set; }
     public OutdoorPending? OutdoorPrivate { get; set; }
@@ -41,7 +45,11 @@ public sealed class Session
 
     public string WatchPocket { get; set; } = "";
     public DateTimeOffset WatchSince { get; set; }
+    public DateTimeOffset WatchPauseAt { get; set; }
     public OutdoorScan WatchPeak { get; set; }
+    public Vector3 WatchOrigin { get; set; }
+    public float WatchMapX { get; set; }
+    public float WatchMapY { get; set; }
     public int WatchBusyHits { get; set; }
     public bool WatchReady { get; set; }
     public string WatchLine { get; set; } = "";
@@ -84,7 +92,10 @@ public sealed class Session
 
     public TimeSpan OutdoorWait(string pocket, string newTier)
     {
-        if (LastOutdoorPocket.Length == 0 || LastOutdoorPocket != pocket || LastOutdoorPost == default)
+        if (LastOutdoorPost == default)
+            return TimeSpan.Zero;
+        var near = LastOutdoorPocket.Length > 0 && NearbyScan.NearbyPockets(LastOutdoorPocket, pocket);
+        if (!near && LastOutdoorPocket != pocket)
             return TimeSpan.Zero;
         var elapsed = DateTimeOffset.UtcNow - LastOutdoorPost;
         var lastRank = NearbyScan.TierRank(LastOutdoorTier);
@@ -92,7 +103,21 @@ public sealed class Session
         var need = nextRank > lastRank
             ? TimeSpan.FromMinutes(Limits.OutdoorUpgradeMinutes)
             : TimeSpan.FromMinutes(NearbyScan.LockMinutes(LastOutdoorTier));
+        if (need < TimeSpan.FromMinutes(Limits.OutdoorAuditNearMinutes))
+            need = TimeSpan.FromMinutes(Limits.OutdoorAuditNearMinutes);
         var left = need - elapsed;
+        return left > TimeSpan.Zero ? left : TimeSpan.Zero;
+    }
+
+    public TimeSpan OutdoorAuditWait(string pocket)
+    {
+        if (LastAuditAt == default)
+            return TimeSpan.Zero;
+        var near = LastAuditPocket.Length > 0 && NearbyScan.NearbyPockets(LastAuditPocket, pocket);
+        var need = near
+            ? TimeSpan.FromMinutes(Limits.OutdoorAuditNearMinutes)
+            : TimeSpan.FromSeconds(Limits.ScanCooldownSeconds);
+        var left = need - (DateTimeOffset.UtcNow - LastAuditAt);
         return left > TimeSpan.Zero ? left : TimeSpan.Zero;
     }
 
@@ -111,7 +136,11 @@ public sealed class Session
     {
         WatchPocket = "";
         WatchSince = default;
+        WatchPauseAt = default;
         WatchPeak = default;
+        WatchOrigin = default;
+        WatchMapX = 0;
+        WatchMapY = 0;
         WatchBusyHits = 0;
         WatchReady = false;
         WatchLine = "";
