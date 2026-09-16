@@ -71,6 +71,8 @@ internal static class VenueView
                     try { Lifestream.Go(loc); }
                     catch (Exception ex) { Plugin.Log.Verbose(ex, "Lifestream"); }
                 }
+                if (ImGui.IsItemHovered())
+                    ImGui.SetTooltip($"Lifestream: {Lifestream.Share(loc)}");
             }
         }
 
