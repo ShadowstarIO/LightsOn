@@ -51,10 +51,6 @@ public sealed class MainWindow : Window
             ImGui.Separator();
         }
 
-        ImGui.TextColored(UiTheme.Teal, plugin.Session.HereLine);
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Where you are. Star is people in range, not a zone census.");
-
         DrawPrivateAsk();
 
         if (ImGui.BeginTabBar("lo-tabs"))
@@ -107,6 +103,7 @@ public sealed class MainWindow : Window
         ImGui.SameLine();
         if (ImGui.SmallButton("Settings"))
             plugin.ToggleConfigUi();
+        UiTheme.DrawHere(plugin.Session.HereLine, true);
 
         DrawPlaceFilters(true);
 
@@ -267,7 +264,7 @@ public sealed class MainWindow : Window
             var blocked = onPlot;
             if (blocked)
                 ImGui.BeginDisabled();
-            if (ImGui.SmallButton("Scan"))
+            if (ImGui.SmallButton("Audit"))
                 plugin.StartOutdoorWatch();
             if (blocked)
                 ImGui.EndDisabled();
@@ -284,6 +281,7 @@ public sealed class MainWindow : Window
         ImGui.SameLine();
         if (ImGui.SmallButton("Settings"))
             plugin.ToggleConfigUi();
+        UiTheme.DrawHere(plugin.Session.HereLine, true);
 
         if (!plugin.Configuration.NoteOutdoorScenes)
             ImGui.TextDisabled("Settings → Note Outdoor Scenes to contribute. You can still read the list.");

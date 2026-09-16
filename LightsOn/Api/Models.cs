@@ -77,19 +77,23 @@ public sealed class VenueLocation
     public bool Subdivision { get; set; }
 
     public int RoomNo => Apartment > 0 ? Apartment : Room;
+    public bool IsApartment => Plot <= 0 && RoomNo > 0;
 
-    public string Address
+    public int HousePlot => IsApartment ? 0 : HousingReader.CanonicalPlot(Plot, Subdivision && RoomNo == 0);
+
+    public string Address => Head + Place.Format(District, Ward, HousePlot, IsApartment ? RoomNo : 0,
+        IsApartment && Subdivision, null, compact: true);
+
+    public string AddressLong => Head + Place.Format(District, Ward, HousePlot, IsApartment ? RoomNo : 0,
+        IsApartment && Subdivision, null, compact: false);
+
+    private string Head
     {
         get
         {
-            var plot = HousingReader.CanonicalPlot(Plot, Subdivision && RoomNo == 0);
-            var place = plot > 0 ? $"W{Ward} P{plot}" : $"W{Ward}";
-            if (RoomNo > 0)
-                place += $"{(Subdivision ? " sub" : "")} R{RoomNo}";
-            var dc = string.IsNullOrWhiteSpace(DataCenter) ? "" : DataCenter + " · ";
-            var world = string.IsNullOrWhiteSpace(World) ? "" : World + " · ";
-            var zone = string.IsNullOrWhiteSpace(District) ? "" : District + " ";
-            return $"{dc}{world}{zone}{place}".Trim();
+            var dc = string.IsNullOrWhiteSpace(DataCenter) ? "" : DataCenter.Trim() + " · ";
+            var world = string.IsNullOrWhiteSpace(World) ? "" : World.Trim() + " · ";
+            return dc + world;
         }
     }
 }
@@ -156,10 +160,12 @@ public sealed class OccupancyProof
     public string District { get; set; } = "";
     public int Ward { get; set; }
     public int Plot { get; set; }
+    public int Apartment { get; set; }
     public bool Subdivision { get; set; }
     public bool Inside { get; set; }
     public bool ThresholdMet { get; set; }
     public bool DoorLocked { get; set; }
+    public bool Unhosted { get; set; }
     public bool Voices { get; set; }
     public bool Glance { get; set; }
     public bool Music { get; set; }

@@ -30,7 +30,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
 
-    public const string Version = "0.0.4.1";
+    public const string Version = "0.0.4.2";
     private const string CommandName = "/lightson";
     private const string CommandAlias = "/lon";
 
@@ -51,17 +51,18 @@ public sealed class Plugin : IDalamudPlugin
     public IReadOnlyList<VenueListing> Venues { get; private set; } = [];
     public IReadOnlyList<OutdoorSnapshot> Outdoors { get; private set; } = [];
     public string StatusLine { get; private set; } = "Loading listings…";
-    public string LastScanLine { get; private set; } = "No scan yet.";
+    public string LastScanLine { get; private set; } = "No audit yet.";
     public string ActionLine { get; set; } = "";
 
     public Plugin()
     {
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         Configuration.EnsureReporterId();
+        RefreshTourPace();
         Configuration.Save();
 
         http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.4.1 (+https://github.com/XozaShadow/LightsOn)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.4.2 (+https://github.com/XozaShadow/LightsOn)");
         directory = new DirectoryClient(http);
         occupancy = new OccupancyClient(http);
 
@@ -132,6 +133,15 @@ public sealed class Plugin : IDalamudPlugin
     public bool PlotUiOpen => plotWindow.IsOpen;
     public void Notify(string text) => Chat.Print("[LightsOn] " + text);
     public bool CanSend => SendBlock() is null;
+
+    public void RefreshTourPace()
+    {
+        Configuration.TrimTour();
+        Session.TourCount = Configuration.TourVenues.Count;
+        Session.SendSeconds = Session.Touring ? Limits.TourSendSeconds : Limits.SendRateSeconds;
+        Session.ScanSeconds = Session.Touring ? Limits.TourScanSeconds : Limits.ScanCooldownSeconds;
+        Session.ObserveSeconds = Session.Touring ? Limits.TourObserveSeconds : Limits.ObserveSeconds;
+    }
 
     public async Task ReportUi(VenueListing venue, string kind)
     {
@@ -304,7 +314,7 @@ public sealed class Plugin : IDalamudPlugin
         if (!NearbyScan.OccupancyEligible(venue))
             return Copy.NoPlot;
         if (!NearbyScan.MatchesVenue(venue))
-            return "Go to that plot first. Reports are location-checked.";
+            return "Go to that listing first. Reports are location-checked.";
         if (venue.Resolution?.IsNow != true)
             return "Only posted hours are reported. Nothing sent.";
 
@@ -313,6 +323,7 @@ public sealed class Plugin : IDalamudPlugin
             return scan.Summary;
 
         var requested = kind;
+        var unhosted = requested == "unhosted";
         var doorLocked = requested == "door_locked" || (!scan.Inside && Session.Check.DoorLocked);
         if (requested == "door_locked")
         {
@@ -322,10 +333,16 @@ public sealed class Plugin : IDalamudPlugin
             doorLocked = true;
         }
 
+        if (requested == "unhosted")
+        {
+            kind = "wrapped_up";
+            doorLocked = doorLocked && !scan.Inside;
+        }
+
         if (kind != "happening" && kind != "wrapped_up")
             return "Unknown report kind.";
 
-        var action = requested == "door_locked" ? "door" : SendAction(kind, scan.Inside, false);
+        var action = requested == "door_locked" ? "door" : requested == "unhosted" ? "unhosted" : SendAction(kind, scan.Inside, false);
         var wait = Session.SendWait(venue.Id, action);
         if (wait > TimeSpan.Zero)
             return $"Already sent. Try again in {(int)Math.Ceiling(wait.TotalSeconds)}s.";
@@ -337,11 +354,13 @@ public sealed class Plugin : IDalamudPlugin
         }
         else
         {
-            if (scan.ThresholdMet && requested != "door_locked")
+            if (scan.ThresholdMet && requested != "door_locked" && !unhosted)
                 return "Enough company on this layer. Quiet is blocked.";
             if (!fromAuto && requested != "door_locked" && Session.WrapSureVenue != venue.Id)
             {
                 Session.WrapSureVenue = venue.Id;
+                if (unhosted)
+                    return "Looks unhosted — visitors, no hosted scene you can tell. Press again to send.";
                 return scan.Inside
                     ? "Are you sure the halls are quiet? Press again to send."
                     : "Are you sure the yard is quiet? Press again to send.";
@@ -361,10 +380,12 @@ public sealed class Plugin : IDalamudPlugin
                 District = here.District,
                 Ward = here.Ward,
                 Plot = here.Plot,
+                Apartment = here.Apartment,
                 Subdivision = here.Subdivision,
                 Inside = scan.Inside,
                 ThresholdMet = scan.ThresholdMet,
                 DoorLocked = doorLocked && !scan.Inside,
+                Unhosted = unhosted,
                 Voices = scan.Voices,
                 Glance = scan.Glance,
                 Music = Session.HeardMusic,
@@ -376,6 +397,8 @@ public sealed class Plugin : IDalamudPlugin
             await occupancy.PostReport(Configuration.OccupancyApiUrl, report, CancellationToken.None).ConfigureAwait(true);
             Session.WrapSureVenue = null;
             Session.MarkSent(venue.Id, action);
+            Configuration.MarkTour(venue.Id);
+            RefreshTourPace();
             await RefreshOccupancy().ConfigureAwait(true);
             await RefreshLog(venue).ConfigureAwait(true);
             var line = kind == "happening"
@@ -383,6 +406,8 @@ public sealed class Plugin : IDalamudPlugin
                 : (scan.Inside ? "Reported: halls are quiet." : "Reported: yard is quiet.");
             if (report.Proof.DoorLocked)
                 line += " Door locked.";
+            if (unhosted)
+                line = "Reported: looks closed." + (report.Proof.DoorLocked ? " Door locked." : "");
             Session.SetAction(venue.Id, line);
             return line;
         }
@@ -413,7 +438,7 @@ public sealed class Plugin : IDalamudPlugin
         if (venue.Occupancy?.IsHappening != true)
             return "Log book is only for lanterns lit.";
         if (!NearbyScan.MatchesVenue(venue))
-            return "Go to that plot first.";
+            return "Go to that listing first.";
         if (Session.OnPlot < TimeSpan.FromMinutes(Limits.LogBookDwellMinutes))
             return $"Stay about {Limits.LogBookDwellMinutes} minutes before leaving a note.";
         var trimmed = (text ?? "").Trim();
@@ -433,6 +458,7 @@ public sealed class Plugin : IDalamudPlugin
                 District = here.District,
                 Ward = here.Ward,
                 Plot = here.Plot,
+                Apartment = here.Apartment,
                 Subdivision = here.Subdivision,
                 Inside = scan.Inside,
                 ThresholdMet = scan.ThresholdMet,
@@ -537,7 +563,7 @@ public sealed class Plugin : IDalamudPlugin
     public void CancelOutdoorWatch()
     {
         Session.ClearWatch();
-        Session.OutdoorLine = "Scan cancelled.";
+        Session.OutdoorLine = "Audit cancelled.";
     }
 
     public async Task FinishOutdoorWatch()
@@ -568,9 +594,9 @@ public sealed class Plugin : IDalamudPlugin
             || msg.Contains("already sent", StringComparison.OrdinalIgnoreCase))
             return "This already went out. Wait a bit before sending again.";
         if (msg.Contains("proof does not match", StringComparison.OrdinalIgnoreCase))
-            return "Scan does not match the listed plot. Nothing sent.";
+            return "Audit does not match the listed place. Nothing sent.";
         if (msg.Contains("thresholdMet", StringComparison.OrdinalIgnoreCase))
-            return "Not enough company after the scan. Nothing sent.";
+            return "Not enough company after the audit. Nothing sent.";
         if (msg.Contains("posted hours", StringComparison.OrdinalIgnoreCase)
             || msg.Contains("not open", StringComparison.OrdinalIgnoreCase))
             return "Only posted hours are reported. Nothing sent.";
@@ -630,7 +656,7 @@ public sealed class Plugin : IDalamudPlugin
         if (Session.Watching)
         {
             Session.ClearWatch();
-            Session.WatchLine = "Left the area. Scan cancelled.";
+            Session.WatchLine = "Left the area. Audit cancelled.";
         }
     }
 
@@ -678,11 +704,13 @@ public sealed class Plugin : IDalamudPlugin
             return;
         if (!Configuration.AutoHappening || !scan.OnPlot || !scan.ThresholdMet)
             return;
+        if (!scan.Inside && (HousingReader.DoorIsLocked() || Session.Check.DoorLocked))
+            return;
         if (venue.Resolution?.IsNow != true)
             return;
         if (Session.ObserveSince == default)
             Session.ObserveSince = DateTimeOffset.UtcNow;
-        if (DateTimeOffset.UtcNow - Session.ObserveSince < TimeSpan.FromSeconds(Limits.ObserveSeconds))
+        if (DateTimeOffset.UtcNow - Session.ObserveSince < TimeSpan.FromSeconds(Session.ObserveSeconds))
             return;
 
         var support = venue.Occupancy?.HappeningReports ?? 0;
@@ -692,7 +720,7 @@ public sealed class Plugin : IDalamudPlugin
             ? TimeSpan.FromMinutes(Limits.AutoSolidMinutes)
             : support >= 1
                 ? TimeSpan.FromMinutes(Limits.AutoSomeMinutes)
-                : TimeSpan.FromSeconds(Limits.SendRateSeconds);
+                : TimeSpan.FromSeconds(Session.SendSeconds);
         if (!MainUiOpen && !plotWindow.IsOpen && support >= 1)
             gap = TimeSpan.FromMinutes(Math.Max(Limits.AutoSomeMinutes, 10));
         if (venue.Id == Session.LastAutoVenue && scan.Inside == Session.LastAutoInside
@@ -775,7 +803,7 @@ public sealed class Plugin : IDalamudPlugin
         if (scan.Pocket.Length == 0 || scan.Pocket != Session.WatchPocket)
         {
             Session.ClearWatch();
-            Session.WatchLine = "Left the area. Scan cancelled.";
+            Session.WatchLine = "Left the area. Audit cancelled.";
             Session.OutdoorLine = Session.WatchLine;
             return;
         }
@@ -823,6 +851,20 @@ public sealed class Plugin : IDalamudPlugin
         var say = type == XivChatType.Say;
         var tell = type is XivChatType.TellIncoming or XivChatType.TellOutgoing;
         var party = type == XivChatType.Party;
+        var emote = type is XivChatType.StandardEmote or XivChatType.CustomEmote;
+        if (emote)
+        {
+            if (!Configuration.UseEmoteSignals)
+                return;
+            var emoteName = NearbyScan.NormName(message.Sender.TextValue);
+            var meEmote = NearbyScan.NormName(ObjectTable.LocalPlayer?.Name.TextValue ?? "");
+            if (emoteName.Length == 0)
+                return;
+            if (meEmote.Length == 0 || emoteName != meEmote)
+                Session.HeardNames.Add(emoteName);
+            Session.HeardEmote = true;
+            return;
+        }
         if (say && !Configuration.UseSaySignals)
             return;
         if ((tell || party) && !Configuration.UseChatSignals)

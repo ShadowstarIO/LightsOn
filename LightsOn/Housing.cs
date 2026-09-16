@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Lumina.Excel.Sheets;
 
@@ -12,11 +13,41 @@ public readonly record struct HousingAddress(
     int Apartment,
     bool Subdivision)
 {
-    public bool OnPlot => Ward is >= 1 and <= 30 && Plot is >= 1 and <= 60;
+    public bool OnHouse => Ward is >= 1 and <= 30 && Plot is >= 1 and <= 60 && Apartment <= 0;
+    public bool OnApartment => Ward is >= 1 and <= 30 && Apartment is >= 1 and <= 99;
+    public bool OnProperty => OnHouse || OnApartment;
+    public bool OnPlot => OnProperty;
 
-    public string Summary => OnPlot
-        ? $"{District}  W{Ward}  P{Plot}" + (Apartment > 0 ? $"{(Subdivision ? " sub" : "")} R{Apartment}" : "") + (Inside ? "  inside" : "  yard")
-        : "not on a plot";
+    public string Summary => Place.Format(District, Ward, Plot, Apartment, Subdivision, Inside, compact: true);
+    public string Long => Place.Format(District, Ward, Plot, Apartment, Subdivision, Inside, compact: false);
+}
+
+internal static class Place
+{
+    public static string Format(
+        string district, int ward, int plot, int apartment, bool subdivision, bool? inside, bool compact)
+    {
+        var bits = new List<string>();
+        if (!string.IsNullOrWhiteSpace(district))
+            bits.Add(district.Trim());
+        if (ward is >= 1 and <= 30)
+            bits.Add(compact ? $"W{ward}" : $"Ward {ward}");
+        if (apartment is >= 1 and <= 99)
+        {
+            if (subdivision)
+                bits.Add(compact ? "Sub" : "Subdivision");
+            bits.Add($"Apt {apartment}");
+        }
+        else if (plot is >= 1 and <= 60)
+            bits.Add(compact ? $"P{plot}" : $"Plot {plot}");
+        else if (subdivision && ward is >= 1 and <= 30)
+            bits.Add(compact ? "Sub" : "Subdivision");
+        if (inside is true)
+            bits.Add("inside");
+        else if (inside is false && plot is >= 1 and <= 60)
+            bits.Add("yard");
+        return string.Join(" ", bits);
+    }
 }
 
 internal static class HousingReader
@@ -29,6 +60,7 @@ internal static class HousingReader
         var room = 0;
         var division = 1;
         var inside = false;
+        var apartment = false;
 
         try
         {
@@ -48,13 +80,25 @@ internal static class HousingReader
                     if (inside)
                     {
                         var hid = h->GetCurrentIndoorHouseId();
-                        if (!hid.IsApartment && hid.PlotIndex < 60)
+                        if (hid.IsApartment)
+                        {
+                            apartment = true;
+                            plot = 0;
+                            if (hid.RoomNumber > 0)
+                                room = hid.RoomNumber;
+                            if (hid.WardIndex is >= 0 and < 30)
+                                ward = hid.WardIndex + 1;
+                            if (hid.ApartmentDivision == 1)
+                                division = 2;
+                            else if (hid.ApartmentDivision == 0)
+                                division = 1;
+                        }
+                        else if (hid.PlotIndex is >= 0 and < 60)
                         {
                             plot = hid.PlotIndex + 1;
-                            ward = hid.WardIndex + 1;
+                            if (hid.WardIndex is >= 0 and < 30)
+                                ward = hid.WardIndex + 1;
                         }
-                        if (hid.IsApartment)
-                            room = hid.RoomNumber > 0 ? hid.RoomNumber : room;
                         var fromHouse = DistrictFromTerritory(hid.TerritoryTypeId);
                         if (IsKnownDistrict(fromHouse))
                             district = fromHouse;
@@ -71,11 +115,14 @@ internal static class HousingReader
             return default;
 
         var subdivision = division == 2;
-        plot = CanonicalPlot(plot, subdivision);
-        if (plot is < 1 or > 60)
+        if (apartment)
             return new HousingAddress(inside, district, ward, 0, room, subdivision);
 
-        return new HousingAddress(inside, district, ward, plot, room, subdivision);
+        plot = CanonicalPlot(plot, subdivision);
+        if (plot is < 1 or > 60)
+            return new HousingAddress(inside, district, ward, 0, 0, subdivision);
+
+        return new HousingAddress(inside, district, ward, plot, 0, subdivision);
     }
 
     public static int CanonicalPlot(int plot, bool subdivision)

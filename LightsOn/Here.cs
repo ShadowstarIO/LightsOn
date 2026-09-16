@@ -21,17 +21,18 @@ internal static class Here
         var people = $" {SeIconChar.BoxedStar.ToIconString()}{PeopleInRange()}";
 
         var housing = HousingReader.Read();
-        if (housing.OnPlot)
+        if (housing.Ward is >= 1 and <= 30)
         {
-            var layer = housing.Inside ? "inside" : "yard";
-            var room = housing.Apartment > 0 ? $" R{housing.Apartment}" : "";
-            var place = $"{housing.District} W{housing.Ward} P{housing.Plot}{room} · {layer}";
+            var place = housing.Long;
+            var (mx, my) = MapCoords();
+            if (!housing.OnProperty && mx > 0 && my > 0)
+                place += $" ({mx:0.0}, {my:0.0})";
             return Join(head, place) + people;
         }
 
         var zone = NearbyScan.CurrentZoneName();
-        var (mx, my) = MapCoords();
-        var coords = mx > 0 && my > 0 ? $" ({mx:0.0}, {my:0.0})" : "";
+        var (zx, zy) = MapCoords();
+        var coords = zx > 0 && zy > 0 ? $" ({zx:0.0}, {zy:0.0})" : "";
         return Join(head, zone + coords) + people;
     }
 

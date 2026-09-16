@@ -11,11 +11,11 @@ Copy sits between OOC and IC.
 | **open?** | Hours on, no occupancy yet |
 | **open!** | Lean toward company |
 | **open~** | Split |
-| **"open"** | Hours on, scan quiet |
+| **"open"** | Hours on, audit quiet |
 | **Extremely busy** / **Some activity** / **Some wandering** | Outdoor pocket. Not used to rank venues. |
 | **IC** | Role-Playing status in range |
 
-Yard and inside list separately. The room weighs more. Ward + Plot is the property. Apartments stay on the list; occupancy is not checked there.
+Yard and inside list separately. The room weighs more. Ward + Plot is a house. Apartments use Ward + Apt, plus Subdivision when the listing is in one.
 
 ## Company score (client, per layer)
 
@@ -26,6 +26,7 @@ Yard and inside list separately. The room weighs more. Ward + Plot is the proper
 | **Party Finder** | Looking for Party | +1 |
 | **Melding** | this status is on a player | +1 |
 | **Glances** | looking at / looked at | +1 total |
+| **Emotes** | looping / in-place emote, or emote chat | +1 total |
 | **Contact** | tell or party with a patron here | +1 total |
 | **Voices** | say with a patron here | +1 total, off unless enabled |
 

@@ -9,14 +9,15 @@ internal static class Copy
     public const string YardBusy = "Yard Busy";
     public const string YardQuiet = "Yard Quiet";
     public const string MarkedOpen = "Open Now";
-    public const string NoReport = "No occupancy yet";
+    public const string NoReport = "No audit yet";
     public const string EnoughCompany = "enough company";
     public const string Quiet = "quiet";
-    public const string NoPlot = "No plot on this listing. Occupancy is for Ward + Plot houses.";
+    public const string NoPlot = "This listing has no house or apartment LightsOn can audit.";
     public const string DoorLocked = "Locked";
+    public const string LooksClosed = "Looks Closed";
     public const string DirectoryUrl = "https://ffxivvenues.com/";
     public const string OutdoorsHint =
-        "Short-range street pockets. Scan and stay in the area, or wait about 10 minutes. Busier scenes note sooner.";
+        "Short-range street pockets. Audit and stay in the area, or wait about 10 minutes. Busier scenes note sooner.";
 
     public const string Welcome =
         "Tired of walking in on posted hours and an empty room? LightsOn is occupancy for listed venues: lanterns lit when there is enough company, quiet when the yard or halls look empty. Reports are optional, on the plot, and never include names or counts.";

@@ -4,6 +4,10 @@ internal static class Limits
 {
     public const int OccupancyHours = 4;
     public const int SendRateSeconds = 45;
+    public const int TourVenues = 3;
+    public const int TourSendSeconds = 20;
+    public const int TourScanSeconds = 10;
+    public const int TourObserveSeconds = 8;
     public const int ResetLockMinutes = 20;
     public const int LogBookDwellMinutes = 8;
     public const int OutdoorDwellMinutes = 10;
