@@ -31,7 +31,7 @@ Travel and Copy use [Lifestream](https://github.com/NightmareXIV/Lifestream) whe
 
 A check is local until you send it. Yard and inside are separate; the room weighs more. Houses are ward and plot. Apartments are ward and apartment (and subdivision when the listing is in one). You have to be on that property.
 
-**Quiet** is always a button. **Active** (Lanterns Lit) may send itself after a short watch, then slows down as more people agree. After three different listed places in a night, waits drop so you can tour.
+**Quiet** and **Active** are buttons once you are on the property. An optional **Auto Audit Routine** in Settings can send lanterns after a short stay; it is off unless you turn it on. Quiet is never automatic. After three different listed places in a night, waits drop so you can tour.
 
 Occupancy lasts while the directory shows the listing as open, up to four hours. Older reports fade, so a fresh quiet can beat a stale busy.
 
