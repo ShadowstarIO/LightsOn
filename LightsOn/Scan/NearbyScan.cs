@@ -140,8 +140,10 @@ internal static class NearbyScan
 
     public static int TierRank(string? tier) => tier switch
     {
-        "extremely_busy" => 3,
-        "some_activity" => 2,
+        "extremely_busy" => 5,
+        "busy" => 4,
+        "some_activity" => 3,
+        "light_activity" => 2,
         "some_wandering" => 1,
         _ => 0,
     };
@@ -149,8 +151,19 @@ internal static class NearbyScan
     public static int LockMinutes(string? tier) => tier switch
     {
         "extremely_busy" => Limits.OutdoorLockBusyMinutes,
+        "busy" => 6,
         "some_activity" => Limits.OutdoorLockActivityMinutes,
+        "light_activity" => 12,
         _ => Limits.OutdoorLockWanderingMinutes,
+    };
+
+    public static int WatchSeconds(string? tier) => TierRank(tier) switch
+    {
+        5 => Limits.OutdoorWatchBusySeconds,
+        4 => 25,
+        3 => Limits.OutdoorWatchSomeSeconds,
+        2 => 45,
+        _ => Limits.OutdoorWatchSeconds,
     };
 
     public static bool NearbyPockets(string? a, string? b)
@@ -168,10 +181,14 @@ internal static class NearbyScan
     {
         nearby = Math.Min(99, nearby);
         zone = Math.Min(99, zone);
-        if (nearby >= 40 || zone >= 80)
+        if (nearby >= 50 || zone >= 85)
             return "extremely_busy";
-        if (nearby >= 15 || zone >= 40)
+        if (nearby >= 28 || zone >= 55)
+            return "busy";
+        if (nearby >= 16 || zone >= 35)
             return "some_activity";
+        if (nearby >= 8 || zone >= 18)
+            return "light_activity";
         if (nearby >= 4)
             return "some_wandering";
         return "";
@@ -180,7 +197,9 @@ internal static class NearbyScan
     public static string TierLabel(string? tier) => tier switch
     {
         "extremely_busy" => "Extremely Busy",
+        "busy" => "Busy",
         "some_activity" => "Some Activity",
+        "light_activity" => "Light Activity",
         "some_wandering" => "Some Wandering",
         _ => "Quiet",
     };

@@ -11,8 +11,10 @@ Separate from venues. Venues stay unranked. Outdoors is a liveliness list so str
 - The same area can be reported again sooner if the scene **got busier**. Same or quieter: wait longer (about 20 / 8 / 5 minutes by last tier). Always at least 5 minutes nearby.
 - Tiers use **people you can see**, not venue math:
   - Some wandering: 4+ nearby
-  - Some activity: 15+ nearby, or 40+ loaded in the zone
-  - Extremely busy: 40+ nearby, or 80+ loaded in the zone
+  - Light activity: 8+ nearby, or 18+ loaded in the zone
+  - Some activity: 16+ nearby, or 35+ loaded in the zone
+  - Busy: 28+ nearby, or 55+ loaded in the zone
+  - Extremely busy: 50+ nearby, or 85+ loaded in the zone
 - Counts cap at **99+**. Nearby and zone counts are sent; names are not.
 - Friends / Free Company can be left out of the nearby company check. Zone count is everyone loaded.
 - If most of what you see is friends or Free Company, LightsOn asks **is this a private gathering?**

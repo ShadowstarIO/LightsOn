@@ -13,10 +13,10 @@ Open with `/lightson` or `/lon`.
 In the plugin installer: **Settings → Experimental → Custom Plugin Repositories**, add:
 
 ```
-https://raw.githubusercontent.com/XozaShadow/LightsOn/main/repo.json
+https://raw.githubusercontent.com/XozaShadow/XIV/main/repo.json
 ```
 
-Turn on **Get plugin testing versions**, then install LightsOn.
+Turn on **Get plugin testing versions**, then install LightsOn. The same catalog lists [StatusShift](https://github.com/XozaShadow/StatusShift).
 
 ## Using it
 

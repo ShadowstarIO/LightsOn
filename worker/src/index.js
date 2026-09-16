@@ -5,9 +5,15 @@ const NOTE_RATE_MS = 60 * 60 * 1000;
 const OUTDOOR_MS = 4 * 60 * 60 * 1000;
 const MAX_BODY = 8 * 1024;
 const VENUES_URL = "https://api.ffxivvenues.com/venue";
-const UA = "LightsOn/0.0.4.7 (+https://github.com/XozaShadow/LightsOn)";
-const TIER_RANK = { extremely_busy: 3, some_activity: 2, some_wandering: 1 };
-const OUTDOOR_LOCK_MS = { extremely_busy: 5 * 60 * 1000, some_activity: 8 * 60 * 1000, some_wandering: 20 * 60 * 1000 };
+const UA = "LightsOn/0.0.4.8 (+https://github.com/XozaShadow/LightsOn)";
+const TIER_RANK = { extremely_busy: 5, busy: 4, some_activity: 3, light_activity: 2, some_wandering: 1 };
+const OUTDOOR_LOCK_MS = {
+  extremely_busy: 5 * 60 * 1000,
+  busy: 6 * 60 * 1000,
+  some_activity: 8 * 60 * 1000,
+  light_activity: 12 * 60 * 1000,
+  some_wandering: 20 * 60 * 1000,
+};
 const OUTDOOR_UPGRADE_MS = 5 * 60 * 1000;
 const OUTDOOR_NEAR_MS = 5 * 60 * 1000;
 const venueCache = new Map();
