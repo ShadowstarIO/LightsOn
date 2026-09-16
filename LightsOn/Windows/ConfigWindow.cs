@@ -60,15 +60,15 @@ public sealed class ConfigWindow : Window
             cfg.HasSeenWelcome = true;
             cfg.Save();
         }
-        UiTheme.Hint("Nothing is sent until this is on. Names and counts never leave your machine. Quiet is always a button.");
+        UiTheme.Hint("Active and Quiet send occupancy. Names and counts never leave. Off means browse only.");
 
         var auto = cfg.AutoHappening;
-        if (ImGui.Checkbox("Auto Lanterns", ref auto))
+        if (ImGui.Checkbox("Auto Audit Routine", ref auto))
         {
             cfg.AutoHappening = auto;
             cfg.Save();
         }
-        UiTheme.Hint("Sends lanterns when the audit is enough. Quiet is never automatic. Tapers off as more people agree.");
+        UiTheme.Hint("After a short stay, send lanterns when the local audit is enough. Off unless you turn it on. Quiet is never automatic. Active and Quiet still work as buttons.");
         if (cfg.ListingsOnly)
             ImGui.EndDisabled();
 
