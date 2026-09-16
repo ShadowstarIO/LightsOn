@@ -31,7 +31,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
 
-    public const string Version = "0.0.4.13";
+    public const string Version = "0.0.4.14";
     public const string OccupancyHost = "https://lightson.shadowstar.io";
     private const string CommandName = "/lightson";
     private const string CommandAlias = "/lon";
@@ -67,7 +67,7 @@ public sealed class Plugin : IDalamudPlugin
         Configuration.Save();
 
         http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.4.13 (+https://github.com/ShadowstarIO/LightsOn)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.4.14 (+https://github.com/ShadowstarIO/LightsOn)");
         directory = new DirectoryClient(http);
         occupancy = new OccupancyClient(http);
 

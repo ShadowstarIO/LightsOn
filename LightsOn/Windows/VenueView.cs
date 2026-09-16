@@ -19,7 +19,6 @@ internal static class VenueView
     public static void Draw(Plugin plugin, VenueListing venue, bool currentPlot)
     {
         var loc = venue.Location;
-        var occ = venue.Occupancy ?? OccupancySnapshot.Unknown;
         var onPlot = NearbyScan.MatchesVenue(venue);
         var here = HousingReader.Read();
         var apartment = loc?.IsApartment == true;
@@ -68,12 +67,21 @@ internal static class VenueView
                 ImGui.SetTooltip("Open the small Current Plot window.");
         }
 
+        ImGui.AlignTextToFramePadding();
         ImGui.TextWrapped(loc?.AddressPanel ?? loc?.AddressLong ?? here.Long);
+        if (!onPlot && loc is not null && Lifestream.Installed() && Reach.CanVisitWorld(loc.World))
+        {
+            ImGui.SameLine();
+            if (ImGui.SmallButton("Teleport"))
+            {
+                try { Lifestream.Go(loc); }
+                catch (Exception ex) { Plugin.Log.Verbose(ex, "Lifestream"); }
+            }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip($"Lifestream: {Lifestream.Share(loc)}");
+        }
 
-        var lean = Lean(occ);
-        ImGui.TextColored(BadgeColor(occ), SummaryStatus(occ, venue.Log, lean));
-
-        DrawLinks(venue, loc, onPlot);
+        DrawLinks(venue);
 
         ImGui.TextDisabled(FlagsLine(venue));
 
@@ -97,7 +105,7 @@ internal static class VenueView
         DrawLogBook(plugin, venue, onPlot);
     }
 
-    private static void DrawLinks(VenueListing venue, VenueLocation? loc, bool onPlot)
+    private static void DrawLinks(VenueListing venue)
     {
         var items = new List<(string Label, Action Click, string Tip)>
         {
@@ -108,12 +116,6 @@ internal static class VenueView
         if (!string.IsNullOrWhiteSpace(venue.Website)
             && venue.Website.IndexOf("ffxivvenues.com", StringComparison.OrdinalIgnoreCase) < 0)
             items.Add(("Website", () => OpenUrl(venue.Website!), "Open the venue website."));
-        if (!onPlot && loc is not null && Lifestream.Installed() && Reach.CanVisitWorld(loc.World))
-            items.Add(("Travel", () =>
-            {
-                try { Lifestream.Go(loc); }
-                catch (Exception ex) { Plugin.Log.Verbose(ex, "Lifestream"); }
-            }, $"Lifestream: {Lifestream.Share(loc)}"));
         items.Sort((a, b) => string.Compare(a.Label, b.Label, StringComparison.OrdinalIgnoreCase));
 
         for (var i = 0; i < items.Count; i++)
@@ -141,16 +143,9 @@ internal static class VenueView
             return;
         }
 
-        if (!onPlot)
-        {
-            ImGui.TextDisabled(venue.Location?.IsApartment == true
-                ? "Go inside this apartment to audit."
-                : "Go to this plot to audit.");
-            return;
-        }
-
         var scanWait = plugin.Session.ScanWait;
-        if (scanWait > TimeSpan.Zero)
+        var auditBlocked = !onPlot || scanWait > TimeSpan.Zero;
+        if (auditBlocked)
             ImGui.BeginDisabled();
         if (ImGui.SmallButton(scanWait > TimeSpan.Zero
                 ? $"Audit ({(int)Math.Ceiling(scanWait.TotalSeconds)}s)"
@@ -159,38 +154,48 @@ internal static class VenueView
             var snap = plugin.ScanNow();
             plugin.Session.SetAction(venue.Id, snap.Summary);
         }
-        if (scanWait > TimeSpan.Zero)
+        if (auditBlocked)
             ImGui.EndDisabled();
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-            ImGui.SetTooltip("Local audit. Quiet is always a button. Lanterns may send themselves.");
+        {
+            ImGui.SetTooltip(!onPlot
+                ? (venue.Location?.IsApartment == true
+                    ? "Go inside this apartment to audit."
+                    : "Stand in the yard or inside this plot. Street of the ward is not enough.")
+                : "Local audit. Quiet is always a button. Lanterns may send themselves.");
+        }
 
+        var canSend = plugin.CanSend && onPlot;
         ImGui.SameLine();
-        var canSend = plugin.CanSend;
         DrawSend(plugin, venue, "Active", "happening", canSend, inside,
-            inside ? Copy.HappeningButton : Copy.YardBusy);
+            !onPlot
+                ? "Walk onto this property first. The yard counts."
+                : inside ? Copy.HappeningButton : Copy.YardBusy);
         ImGui.SameLine();
         DrawSend(plugin, venue, "Quiet", "wrapped_up", canSend, inside,
-            inside ? Copy.WrappedButton : Copy.YardQuiet);
-        if (!inside && HousingReader.DoorIsLocked())
+            !onPlot
+                ? "Walk onto this property first. The yard counts."
+                : inside ? Copy.WrappedButton : Copy.YardQuiet);
+        if (onPlot && !inside && HousingReader.DoorIsLocked())
         {
             ImGui.SameLine();
             DrawSend(plugin, venue, Copy.DoorLocked, "door_locked", canSend, false);
         }
 
-        if (ShowLooksClosed(plugin, here))
+        if (onPlot && ShowLooksClosed(plugin, here))
         {
             ImGui.SameLine();
             DrawSend(plugin, venue, Copy.LooksClosed, "unhosted", canSend, inside);
         }
 
         var action = plugin.Session.ActionFor(venue.Id);
-        var line = action.Length > 0 ? action : plugin.LastScanLine;
+        var line = action.Length > 0 ? action : onPlot ? plugin.LastScanLine : "";
         if (line.Length > 0)
-        {
-            ImGui.SameLine();
-            ImGui.AlignTextToFramePadding();
             ImGui.TextWrapped(line);
-        }
+        else if (!onPlot)
+            ImGui.TextDisabled(venue.Location?.IsApartment == true
+                ? "Go inside this apartment to audit."
+                : "Go to this plot to audit. The yard is enough.");
 
         if (plugin.Session.ObserveSince != default)
         {
@@ -255,14 +260,17 @@ internal static class VenueView
             _ = plugin.RefreshNotes(venue);
         }
 
+        var occ = venue.Occupancy ?? OccupancySnapshot.Unknown;
         var log = venue.Log;
         var exterior = log.Where(e => !e.Inside).Take(Limits.ReportCap).ToList();
         var interior = log.Where(e => e.Inside).Take(Limits.ReportCap).ToList();
-        var locked = log.Any(e => e.DoorLocked) || venue.Occupancy.DoorLocked;
+        var locked = log.Any(e => e.DoorLocked) || occ.DoorLocked;
         var apartment = venue.Location?.IsApartment == true;
 
         UiTheme.Gap();
         ImGui.Separator();
+        ImGui.TextColored(BadgeColor(occ), SummaryStatus(occ, log, Lean(occ)));
+
         if (!apartment)
         {
             ImGui.TextColored(UiTheme.Teal, $"Exterior  {Score(exterior)}");
