@@ -28,18 +28,18 @@ internal static class Copy
 
     public static readonly string[] LogAdjectives =
     [
-        "Warm", "Kind", "Gentle", "Friendly", "Cozy", "Calm", "Quiet", "Soft",
-        "Bright", "Lively", "Sweet", "Lovely", "Nice", "Easy", "Smooth", "Mellow",
-        "Pleasant", "Welcoming", "Relaxed", "Cheerful", "Peaceful", "Inviting", "Fine", "Great",
-        "Good", "Light", "Fresh", "Happy", "Steady", "Open", "Fair", "Polite",
+        "Bright", "Calm", "Cheerful", "Cozy", "Easy", "Fair", "Fine", "Fresh",
+        "Friendly", "Gentle", "Good", "Great", "Happy", "Inviting", "Kind", "Light",
+        "Lively", "Lovely", "Mellow", "Nice", "Open", "Peaceful", "Pleasant", "Polite",
+        "Quiet", "Relaxed", "Smooth", "Soft", "Steady", "Sweet", "Warm", "Welcoming",
     ];
 
     public static readonly string[] LogNouns =
     [
-        "host", "staff", "welcome", "music", "crowd", "room", "hall", "space",
-        "vibe", "lights", "mood", "company", "energy", "scene", "bar", "floor",
-        "stage", "drinks", "mix", "chat", "seats", "corner", "night", "air",
-        "door", "yard", "wait", "walk", "set", "entry",
+        "Air", "Bar", "Chat", "Company", "Corner", "Crowd", "Door", "Drinks",
+        "Energy", "Entry", "Floor", "Food", "Hall", "Host", "Lights", "Mix",
+        "Mood", "Music", "Night", "Room", "Scene", "Seats", "Set", "Space",
+        "Staff", "Stage", "Vibe", "Wait", "Walk", "Welcome", "Yard",
     ];
 
     public static string LogLine(int adj, int noun)

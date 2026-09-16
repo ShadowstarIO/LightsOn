@@ -10,6 +10,7 @@ internal static class Limits
     public const int TourObserveSeconds = 8;
     public const int ResetLockMinutes = 20;
     public const int LogBookDwellMinutes = 8;
+    public const int LogBookNoteMinutes = 60;
     public const int OutdoorDwellMinutes = 10;
     public const int OutdoorListMinutes = 20;
     public const int OutdoorWatchSeconds = 60;

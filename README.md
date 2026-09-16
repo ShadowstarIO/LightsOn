@@ -30,7 +30,7 @@ Public occupancy lasts while posted hours are on, **up to 4 hours**. Older repor
 
 ## Log Book
 
-Two lists, not free-form. Example: *Kind host*, *Warm music*. One note per person per venue per day.
+Two lists, not free-form. Example: *Kind Host*, *Warm Music*. One note per person per venue per hour. Flavor only — not an occupancy point.
 
 ## Outdoors
 

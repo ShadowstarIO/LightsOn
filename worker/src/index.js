@@ -1,11 +1,11 @@
 const WINDOW_MS = 4 * 60 * 60 * 1000;
 const RATE_MS = 45 * 1000;
 const NOTE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const NOTE_RATE_MS = 24 * 60 * 60 * 1000;
+const NOTE_RATE_MS = 60 * 60 * 1000;
 const OUTDOOR_MS = 20 * 60 * 1000;
 const MAX_BODY = 8 * 1024;
 const VENUES_URL = "https://api.ffxivvenues.com/venue";
-const UA = "LightsOn/0.0.4.4 (+https://github.com/XozaShadow/LightsOn)";
+const UA = "LightsOn/0.0.4.6 (+https://github.com/XozaShadow/LightsOn)";
 const TIER_RANK = { extremely_busy: 3, some_activity: 2, some_wandering: 1 };
 const OUTDOOR_LOCK_MS = { extremely_busy: 3 * 60 * 1000, some_activity: 8 * 60 * 1000, some_wandering: 20 * 60 * 1000 };
 const OUTDOOR_UPGRADE_MS = 3 * 60 * 1000;
@@ -411,7 +411,7 @@ async function postNote(env, request) {
     "SELECT id FROM notes WHERE reporter_id = ? AND venue_id = ? AND at >= ? LIMIT 1",
   ).bind(body.reporterId, body.venueId, dayAgo).first();
   if (recent)
-    return json({ error: "already left a note here today" }, 429);
+    return json({ error: "already left a note here this hour" }, 429);
 
   const expires = new Date(now.getTime() + NOTE_TTL_MS).toISOString();
   await env.DB.prepare(
@@ -529,8 +529,8 @@ async function readJson(request) {
   }
 }
 
-const LOG_ADJ = ["Warm", "Kind", "Gentle", "Friendly", "Cozy", "Calm", "Quiet", "Soft", "Bright", "Lively", "Sweet", "Lovely", "Nice", "Easy", "Smooth", "Mellow", "Pleasant", "Welcoming", "Relaxed", "Cheerful", "Peaceful", "Inviting", "Fine", "Great", "Good", "Light", "Fresh", "Happy", "Steady", "Open", "Fair", "Polite"];
-const LOG_NOUN = ["host", "staff", "welcome", "music", "crowd", "room", "hall", "space", "vibe", "lights", "mood", "company", "energy", "scene", "bar", "floor", "stage", "drinks", "mix", "chat", "seats", "corner", "night", "air", "door", "yard", "wait", "walk", "set", "entry"];
+const LOG_ADJ = ["Bright", "Calm", "Cheerful", "Cozy", "Easy", "Fair", "Fine", "Fresh", "Friendly", "Gentle", "Good", "Great", "Happy", "Inviting", "Kind", "Light", "Lively", "Lovely", "Mellow", "Nice", "Open", "Peaceful", "Pleasant", "Polite", "Quiet", "Relaxed", "Smooth", "Soft", "Steady", "Sweet", "Warm", "Welcoming"];
+const LOG_NOUN = ["Air", "Bar", "Chat", "Company", "Corner", "Crowd", "Door", "Drinks", "Energy", "Entry", "Floor", "Food", "Hall", "Host", "Lights", "Mix", "Mood", "Music", "Night", "Room", "Scene", "Seats", "Set", "Space", "Staff", "Stage", "Vibe", "Wait", "Walk", "Welcome", "Yard"];
 const LOG_PHRASES = new Set(LOG_ADJ.flatMap((a) => LOG_NOUN.map((n) => `${a} ${n}`)));
 
 function sanitizeNote(raw) {

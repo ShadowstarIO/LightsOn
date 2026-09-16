@@ -30,7 +30,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
 
-    public const string Version = "0.0.4.5";
+    public const string Version = "0.0.4.6";
     private const string CommandName = "/lightson";
     private const string CommandAlias = "/lon";
 
@@ -62,7 +62,7 @@ public sealed class Plugin : IDalamudPlugin
         Configuration.Save();
 
         http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.4.5 (+https://github.com/XozaShadow/LightsOn)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.4.6 (+https://github.com/XozaShadow/LightsOn)");
         directory = new DirectoryClient(http);
         occupancy = new OccupancyClient(http);
 
@@ -459,6 +459,9 @@ public sealed class Plugin : IDalamudPlugin
             return "Go to that listing first.";
         if (Session.OnPlot < TimeSpan.FromMinutes(Limits.LogBookDwellMinutes))
             return $"Stay about {Limits.LogBookDwellMinutes} minutes before leaving a note.";
+        var noteWait = Session.NoteWait(venue.Id);
+        if (noteWait > TimeSpan.Zero)
+            return $"Already left a note here. Try again in {Math.Max(1, (int)Math.Ceiling(noteWait.TotalMinutes))}m.";
         var trimmed = (text ?? "").Trim();
         if (Copy.IsLogPhrase(trimmed) is false)
             return "Pick a line from the lists.";
@@ -485,12 +488,18 @@ public sealed class Plugin : IDalamudPlugin
         try
         {
             await occupancy.PostNote(Configuration.OccupancyApiUrl, post, CancellationToken.None).ConfigureAwait(true);
+            Session.MarkNoted(venue.Id);
             await RefreshNotes(venue).ConfigureAwait(true);
             return "Note left in the log book.";
         }
         catch (Exception ex)
         {
             Log.Warning(ex, "Note failed");
+            var msg = ex.Message ?? "";
+            if (msg.Contains("already left a note", StringComparison.OrdinalIgnoreCase))
+                return "Already left a note here this hour.";
+            if (msg.Contains("lanterns are lit", StringComparison.OrdinalIgnoreCase))
+                return "Log book is only for lanterns lit.";
             return "Note did not reach the server.";
         }
     }

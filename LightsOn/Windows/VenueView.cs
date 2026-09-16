@@ -295,17 +295,21 @@ internal static class VenueView
         UiTheme.SearchCombo("##noun", ref nounIdx, Copy.LogNouns, ref nounFilter);
 
         var wait = TimeSpan.FromMinutes(Limits.LogBookDwellMinutes) - plugin.Session.OnPlot;
+        var noteWait = plugin.Session.NoteWait(venue.Id);
         var ready = onPlot && plugin.Configuration.AllowLogBook && plugin.CanSend
                     && venue.Occupancy?.IsHappening == true
-                    && wait <= TimeSpan.Zero;
+                    && wait <= TimeSpan.Zero
+                    && noteWait <= TimeSpan.Zero;
         ImGui.SameLine();
         if (!ready)
             ImGui.BeginDisabled();
         var label = ready
             ? "+ Note"
-            : onPlot && venue.Occupancy?.IsHappening == true && wait > TimeSpan.Zero
-                ? $"+ Note ({FmtWait(wait)})"
-                : "+ Note";
+            : onPlot && venue.Occupancy?.IsHappening == true && noteWait > TimeSpan.Zero
+                ? $"+ Note ({FmtWait(noteWait)})"
+                : onPlot && venue.Occupancy?.IsHappening == true && wait > TimeSpan.Zero
+                    ? $"+ Note ({FmtWait(wait)})"
+                    : "+ Note";
         if (ImGui.SmallButton(label))
             _ = plugin.LeaveNoteUi(venue, Copy.LogLine(adjIdx, nounIdx));
         if (!ready)
@@ -318,8 +322,10 @@ internal static class VenueView
                 ImGui.SetTooltip("Log book opens when lanterns are lit.");
             else if (wait > TimeSpan.Zero)
                 ImGui.SetTooltip($"Stay about {Limits.LogBookDwellMinutes} minutes on the property.");
+            else if (noteWait > TimeSpan.Zero)
+                ImGui.SetTooltip("One note an hour at this listing.");
             else
-                ImGui.SetTooltip("Leave this pair in the log book.");
+                ImGui.SetTooltip("Leave this pair in the log book. Flavor only — not an occupancy point.");
         }
 
         if (venue.Notes.Count == 0)
