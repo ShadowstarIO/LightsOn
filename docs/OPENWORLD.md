@@ -20,5 +20,5 @@ Separate from venues. Venues stay unranked. Outdoors is a liveliness list so str
 - If most of what you see is friends or Free Company, LightsOn asks **is this a private gathering?**
   - ≥ 33% of LightsOn votes say private, and < 25% say public → hide
   - ≥ 25% say public → list (public wins if both fire)
-- Public list is **~4 hours**, hottest then newest. Zones on the left (`World - Zone - Place` + colored status + report count). Reports on the right: age, coords, status, flags. Flag places a map marker on the cell, not a person’s feet.
+- Public list is **~4 hours**, hottest then newest. One row per world + zone on the left (highest crowd, total reports). Reports on the right: age, coords, flag, status, nearby/zone counts. Hover **[i]** for IC, glances, emotes, voices. Flag places a map marker on the cell, not a person’s feet.
 - Outdoor reports are for the street, not listed plots.

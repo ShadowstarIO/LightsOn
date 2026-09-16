@@ -31,11 +31,12 @@ internal static class Zone
         var bits = new System.Collections.Generic.List<string>();
         if (!string.IsNullOrWhiteSpace(world))
             bits.Add(world.Trim());
-        if (!string.IsNullOrWhiteSpace(region)
-            && !string.Equals(region, place, StringComparison.OrdinalIgnoreCase))
-            bits.Add(region.Trim());
-        if (!string.IsNullOrWhiteSpace(place))
-            bits.Add(place.Trim());
+        var p = (place ?? "").Trim();
+        var r = (region ?? "").Trim();
+        if (r.Length > 0 && (p.Length == 0 || p.IndexOf(r, StringComparison.OrdinalIgnoreCase) < 0))
+            bits.Add(r);
+        if (p.Length > 0)
+            bits.Add(p);
         return string.Join(" - ", bits);
     }
 
@@ -54,7 +55,7 @@ internal static class Zone
 
     private static string Kind(uint use) => use switch
     {
-        0 => "City · mounts · safe",
+        0 => "City · no mounts · safe",
         1 => "Overworld · mounts · wildlife",
         2 => "Inn · no mounts · instance",
         3 or 4 => "Dungeon · no mounts · instance",
@@ -65,8 +66,8 @@ internal static class Zone
         16 or 17 or 36 => "Raid · no mounts · instance",
         18 or 28 or 37 or 39 => "PvP · no mounts · hostile",
         21 => "Firmament · mounts · safe",
-        22 => "Wedding · mounts · safe",
-        23 => "Gold Saucer · mounts · safe",
+        22 => "Wedding · no mounts · safe",
+        23 => "Gold Saucer · no mounts · safe",
         26 or 41 or 47 or 48 or 52 or 53 or 61 => "Exploration · mounts · hostile",
         31 => "Deep dungeon · no mounts · instance",
         49 => "Island · mounts",

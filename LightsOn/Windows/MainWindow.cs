@@ -213,7 +213,7 @@ public sealed class MainWindow : Window
         {
             ImGui.TextColored(UiTheme.TierColor(zone.Tier), "·");
             ImGui.SameLine(0, 6);
-            var label = Zone.Line(zone.World, zone.Region, zone.Place);
+            var label = OutdoorTitle(zone);
             if (ImGui.Selectable($"{label}##{zone.Key}", zone.Key == selectedZone))
                 selectedZone = zone.Key;
             ImGui.SameLine();
@@ -237,42 +237,79 @@ public sealed class MainWindow : Window
         var top = picked.Reports[0];
         NearbyScan.TryParsePocket(top.Pocket, out _, out var territory, out _, out _);
         var (_, _, kind) = Zone.Describe(territory);
-        ImGui.TextColored(UiTheme.Title, Zone.Line(picked.World, picked.Region, picked.Place));
+        ImGui.TextColored(UiTheme.Title, OutdoorTitle(picked));
         if (kind.Length > 0)
             ImGui.TextDisabled(kind);
         ImGui.Separator();
         foreach (var row in picked.Reports)
+            DrawOutdoorReport(row);
+    }
+
+    private void DrawOutdoorReport(OutdoorSnapshot row)
+    {
+        var id = $"{row.Pocket}{row.UpdatedAt:o}";
+        ImGui.AlignTextToFramePadding();
+        ImGui.TextDisabled(VenueView.Age(row.UpdatedAt));
+        var coords = NearbyScan.PocketCoords(row.Pocket);
+        if (coords.Length > 0)
         {
-            var bits = new List<string> { VenueView.Age(row.UpdatedAt) };
-            var coords = NearbyScan.PocketCoords(row.Pocket);
-            if (coords.Length > 0)
-                bits.Add(coords);
-            bits.Add(NearbyScan.TierLabel(row.Tier));
-            if (!string.IsNullOrWhiteSpace(row.Activity))
-                bits.Add(row.Activity);
-            if (row.InCharacter)
-                bits.Add("IC");
-            if (row.Patrons > 0)
-                bits.Add($"p{Zone.CountLabel(row.Patrons)}");
-            if (row.ZoneCount > 0)
-                bits.Add($"{Zone.CountLabel(row.ZoneCount)} zone");
-            if (row.Voices)
-                bits.Add("voices");
-            if (row.Glance)
-                bits.Add("glances");
-            if (row.Emotes)
-                bits.Add("emotes");
-            if (row.Score > 0)
-                bits.Add($"+{row.Score}");
-            if (string.Equals(row.Pocket, plugin.Session.PocketKey, StringComparison.Ordinal))
-                bits.Add("here");
-            ImGui.TextColored(UiTheme.TierColor(row.Tier), string.Join(" · ", bits));
-            ImGui.SameLine();
-            if (ImGui.SmallButton($"Flag##{row.Pocket}{row.UpdatedAt:o}"))
-                Here.FlagPocket(row.Pocket);
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Map flag on this pocket. Coarse cell, not a person's feet.");
+            ImGui.SameLine(0, 0);
+            ImGui.TextDisabled(" - ");
+            ImGui.SameLine(0, 0);
+            ImGui.TextDisabled(coords);
         }
+        ImGui.SameLine(0, 4);
+        if (ImGui.SmallButton($"Flg##{id}"))
+            Here.FlagPocket(row.Pocket);
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Map flag on this pocket. Coarse cell, not a person's feet.");
+        ImGui.SameLine();
+        ImGui.TextColored(UiTheme.TierColor(row.Tier), NearbyScan.TierLabel(row.Tier));
+        ImGui.SameLine();
+        ImGui.Text($"{Zone.CountLabel(row.Patrons)}/{Zone.CountLabel(row.ZoneCount)}");
+        if (string.Equals(row.Pocket, plugin.Session.PocketKey, StringComparison.Ordinal))
+        {
+            ImGui.SameLine();
+            ImGui.TextColored(UiTheme.Amber, "here");
+        }
+        var info = OutdoorInfo(row);
+        if (info.Length > 0)
+        {
+            ImGui.SameLine();
+            ImGui.TextDisabled("[i]");
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(info);
+        }
+    }
+
+    private static string OutdoorTitle(OutdoorZone zone)
+    {
+        if (zone.Reports.Count > 0
+            && NearbyScan.TryParsePocket(zone.Reports[0].Pocket, out _, out var territory, out _, out _))
+        {
+            var (region, place, _) = Zone.Describe(territory);
+            if (place.Length > 0)
+                return Zone.Line(zone.World, region, place);
+        }
+        return Zone.Line(zone.World, zone.Region, zone.Place);
+    }
+
+    private static string OutdoorInfo(OutdoorSnapshot row)
+    {
+        var bits = new List<string>();
+        if (!string.IsNullOrWhiteSpace(row.Activity))
+            bits.Add(row.Activity);
+        if (row.InCharacter)
+            bits.Add("IC");
+        if (row.Glance)
+            bits.Add("glances");
+        if (row.Emotes)
+            bits.Add("emotes");
+        if (row.Voices)
+            bits.Add("voices");
+        if (row.Score > 0)
+            bits.Add($"signals +{row.Score}");
+        return string.Join(" · ", bits);
     }
 
     private void DrawOutdoorScanBar()
@@ -492,8 +529,10 @@ public sealed class MainWindow : Window
 
     private static string ZoneKey(OutdoorSnapshot row)
     {
-        var region = string.IsNullOrWhiteSpace(row.Zone) ? row.Place : row.Zone;
-        return $"{row.World}|{region}|{row.Place}";
+        if (NearbyScan.TryParsePocket(row.Pocket, out var world, out var territory, out _, out _))
+            return $"{world}|{territory}";
+        var zone = string.IsNullOrWhiteSpace(row.Zone) ? row.Place : row.Zone;
+        return $"{row.World}|{zone}";
     }
 
     private static void PlaceCombo(string id, string preview, List<string> items, string allLabel, ref string filter, ref string picked)
