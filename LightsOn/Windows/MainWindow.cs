@@ -319,7 +319,9 @@ public sealed class MainWindow : Window
         var ready = plugin.Session.WatchReady;
         var canReport = plugin.Configuration.NoteOutdoorScenes && plugin.CanSend;
         var here = NearbyScan.RunOutdoor(plugin);
-        var auditWait = here.Pocket.Length > 0 ? plugin.Session.OutdoorAuditWait(here.Pocket) : TimeSpan.Zero;
+        var auditWait = string.IsNullOrEmpty(here.Pocket)
+            ? TimeSpan.Zero
+            : plugin.Session.OutdoorAuditWait(here.Pocket);
 
         if (watching)
         {

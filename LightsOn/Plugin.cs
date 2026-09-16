@@ -31,7 +31,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
 
-    public const string Version = "0.0.4.9";
+    public const string Version = "0.0.4.10";
     private const string CommandName = "/lightson";
     private const string CommandAlias = "/lon";
 
@@ -63,7 +63,7 @@ public sealed class Plugin : IDalamudPlugin
         Configuration.Save();
 
         http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.4.9 (+https://github.com/XozaShadow/LightsOn)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.4.10 (+https://github.com/XozaShadow/LightsOn)");
         directory = new DirectoryClient(http);
         occupancy = new OccupancyClient(http);
 
@@ -584,7 +584,7 @@ public sealed class Plugin : IDalamudPlugin
             return;
         }
         var scan = NearbyScan.RunOutdoor(this);
-        if (scan.Pocket.Length == 0)
+        if (string.IsNullOrEmpty(scan.Pocket))
         {
             Session.OutdoorLine = "Not in a place LightsOn can report.";
             return;
@@ -626,7 +626,7 @@ public sealed class Plugin : IDalamudPlugin
     public async Task FinishOutdoorWatch()
     {
         var peak = Session.WatchPeak;
-        if (peak.Pocket.Length == 0 || peak.Tier.Length == 0)
+        if (string.IsNullOrEmpty(peak.Pocket) || string.IsNullOrEmpty(peak.Tier))
         {
             Session.ClearWatch();
             Session.OutdoorLine = "Quiet here. Nothing to report.";
@@ -809,7 +809,7 @@ public sealed class Plugin : IDalamudPlugin
             return;
 
         var scan = NearbyScan.RunOutdoor(this);
-        if (scan.Pocket.Length == 0)
+        if (string.IsNullOrEmpty(scan.Pocket))
             return;
         if (scan.Pocket != Session.PocketKey)
         {
@@ -882,7 +882,7 @@ public sealed class Plugin : IDalamudPlugin
         }
 
         var scan = NearbyScan.RunOutdoor(this);
-        if (scan.Pocket.Length == 0)
+        if (string.IsNullOrEmpty(scan.Pocket))
         {
             Session.ClearWatch();
             Session.WatchLine = "Left the area. Audit cancelled.";
