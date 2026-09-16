@@ -2,6 +2,7 @@ using System;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.Text;
+using LightsOn.Scan;
 
 namespace LightsOn.Windows;
 
@@ -39,6 +40,14 @@ internal static class UiTheme
         if (ImGui.IsItemHovered())
             ImGui.SetTooltip("Where you are. Cross-world mark is people in range, not a zone census.");
     }
+
+    public static Vector4 TierColor(string? tier) => NearbyScan.TierRank(tier) switch
+    {
+        3 => Happening,
+        2 => Amber,
+        1 => Yellow,
+        _ => Mute,
+    };
 
     public static Vector4 AgeColor(DateTimeOffset? at)
     {

@@ -8,7 +8,7 @@ Testing host (public GET): `https://lightson.wbro12-cloudflare.workers.dev`
 
 Writes (**POST**) are not a public API. They require a private ingest key compiled into the shipping plugin.
 
-Windows: occupancy while posted hours are on, **up to 4 hours**, weight `1 / max(1, hours old)`. Cap 12 rows. Notes: **7 days**, cap 12. Outdoors list: **20 minutes**.
+Windows: occupancy while posted hours are on, **up to 4 hours**, weight `1 / max(1, hours old)`. Cap 12 rows. Notes: **7 days**, cap 12. Outdoors list: **4 hours**.
 
 ## Read (public)
 
@@ -18,7 +18,7 @@ Windows: occupancy while posted hours are on, **up to 4 hours**, weight `1 / max
 | GET | `/v1/occupancy` | Snapshot per listing: `venueId`, `state` (`happening` \| `wrapped_up` \| `mixed`), layer counts, `lean`, `doorLocked`, `updatedAt`, `expiresAt` |
 | GET | `/v1/reports?venueId=` | Last 4 hours for one listing, while hours are on. Kind, yard vs inside, chips. Cap 12. |
 | GET | `/v1/notes?venueId=` | Active log-book lines. Phrases only. |
-| GET | `/v1/outdoors` | Short-range outdoor pockets, last 20 minutes |
+| GET | `/v1/outdoors` | Outdoor reports, last 4 hours. Pocket, world, place, zone, tier, nearby/zone counts (cap 99), chips, optional scene. No names. |
 
 Cached about 60s. CORS is open for GET.
 

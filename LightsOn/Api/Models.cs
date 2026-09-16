@@ -289,9 +289,17 @@ public sealed class OutdoorSnapshot
     public string Pocket { get; set; } = "";
     public string World { get; set; } = "";
     public string Place { get; set; } = "";
+    public string Zone { get; set; } = "";
     public string Tier { get; set; } = "";
     public bool InCharacter { get; set; }
     public int Reports { get; set; }
+    public int Patrons { get; set; }
+    public int ZoneCount { get; set; }
+    public int Score { get; set; }
+    public bool Voices { get; set; }
+    public bool Glance { get; set; }
+    public bool Emotes { get; set; }
+    public string Activity { get; set; } = "";
     public DateTimeOffset? UpdatedAt { get; set; }
 }
 
@@ -300,8 +308,16 @@ public sealed class OutdoorReport
     public string Pocket { get; set; } = "";
     public string World { get; set; } = "";
     public string Place { get; set; } = "";
+    public string Zone { get; set; } = "";
     public string Tier { get; set; } = "";
     public bool InCharacter { get; set; }
+    public int Patrons { get; set; }
+    public int ZoneCount { get; set; }
+    public int Score { get; set; }
+    public bool Voices { get; set; }
+    public bool Glance { get; set; }
+    public bool Emotes { get; set; }
+    public string Activity { get; set; } = "";
     public string ReporterId { get; set; } = "";
     public bool? PrivateGathering { get; set; }
 }

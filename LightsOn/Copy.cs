@@ -21,7 +21,7 @@ internal static class Copy
             ? DirectoryUrl
             : $"https://ffxivvenues.com/venue/{venueId}";
     public const string OutdoorsHint =
-        "Short-range street pockets. Audit and stay in the area, or wait about 10 minutes. Busier scenes note sooner.";
+        "Street pockets. Audit and stay, or wait about 10 minutes. Same area waits 5 minutes.";
 
     public const string Welcome =
         "Tired of walking in on posted hours and an empty room? LightsOn is occupancy for listed venues: lanterns lit when there is enough company, quiet when the yard or halls look empty. Reports are optional, on the plot, and never include names or counts.";
@@ -58,5 +58,27 @@ internal static class Copy
         var a = s[..sp];
         var n = s[(sp + 1)..];
         return System.Array.IndexOf(LogAdjectives, a) >= 0 && System.Array.IndexOf(LogNouns, n) >= 0;
+    }
+
+    public static readonly string[] OutdoorScenes =
+    [
+        "—",
+        "Camp", "Dance", "Event", "Fight", "Hunt", "Market",
+        "Parade", "Party", "Performance", "RP", "Social",
+    ];
+
+    public static string OutdoorScene(int idx)
+    {
+        if (idx <= 0 || idx >= OutdoorScenes.Length)
+            return "";
+        return OutdoorScenes[idx];
+    }
+
+    public static bool IsOutdoorScene(string? text)
+    {
+        var s = (text ?? "").Trim();
+        if (s.Length == 0)
+            return true;
+        return System.Array.IndexOf(OutdoorScenes, s) > 0;
     }
 }

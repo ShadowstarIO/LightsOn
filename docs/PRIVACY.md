@@ -23,7 +23,7 @@ Only with **Send Reports** on:
 
 **Log Book** — same proof, plus a pair from two lists. Only while lanterns are lit, after ~8 minutes on the plot.
 
-**Outdoor scenes** — world, place name, pocket id, tier, in-character boolean, optional private-gathering vote. No names.
+**Outdoor scenes** — world, place, pocket id, tier, nearby and zone counts (cap 99, never names), optional scene word, in-character boolean, optional private-gathering vote.
 
 Listings are fetched from the public community venue directory ([FFXIV Venues](https://ffxivvenues.com/)). Occupancy is LightsOn’s host. Occupancy GET is public; writes are not.
 

@@ -31,13 +31,22 @@ public readonly record struct OutdoorScan(
     string Pocket,
     string World,
     string Place,
+    string Zone,
+    string Kind,
     int Patrons,
+    int ZoneCount,
     int Score,
     bool InCharacter,
+    bool Glance,
+    bool Voices,
+    bool Emotes,
     int Visible,
     int Familiar,
     string Tier,
-    string Summary)
+    string Summary,
+    Vector3 Origin,
+    float MapX,
+    float MapY)
 {
     public bool AskPrivate => Visible >= 3 && Familiar * 2 >= Visible;
 }
@@ -86,17 +95,22 @@ internal static class NearbyScan
             return default;
 
         var world = CurrentWorldName();
-        var place = CurrentZoneName();
+        var (region, place, kind) = Zone.Describe(Plugin.ClientState.TerritoryType);
+        if (place.Length == 0)
+            place = CurrentZoneName();
         var pos = player.Position;
-        var gx = (int)MathF.Floor(pos.X / 20f);
-        var gz = (int)MathF.Floor(pos.Z / 20f);
+        var cell = Limits.OutdoorCellYalms;
+        var gx = (int)MathF.Floor(pos.X / cell);
+        var gz = (int)MathF.Floor(pos.Z / cell);
         var pocket = $"{world}|{Plugin.ClientState.TerritoryType}|{gx}|{gz}";
-        var tally = CountNearby(plugin, player, Limits.YardRangeYalms);
-        var tier = TierName(tally.Patrons, tally.Score);
+        var (tally, zoneCount) = CountOutdoor(plugin, player);
+        var tier = OutdoorTier(tally.Patrons, zoneCount);
         var (mx, my) = Here.WorldToMap(Plugin.ClientState.TerritoryType, pos.X, pos.Z);
         var coords = mx > 0 && my > 0 ? $" ({mx:0.0}, {my:0.0})" : "";
-        var summary = $"{place}{coords} · {TierLabel(tier)}";
-        return new OutdoorScan(pocket, world, place, tally.Patrons, tally.Score, tally.InCharacter, tally.Visible, tally.Familiar, tier, summary);
+        var summary = $"{place}{coords} · {TierLabel(tier)} · {Zone.CountLabel(tally.Patrons)} nearby";
+        return new OutdoorScan(pocket, world, place, region, kind, tally.Patrons, zoneCount, tally.Score,
+            tally.InCharacter, tally.Glance, tally.Voices, tally.Emotes, tally.Visible, tally.Familiar,
+            tier, summary, pos, mx, my);
     }
 
     public static bool TryParsePocket(string pocket, out string world, out uint territory, out int gx, out int gz)
@@ -120,7 +134,7 @@ internal static class NearbyScan
     {
         if (!TryParsePocket(pocket, out _, out var territory, out var gx, out var gz))
             return "";
-        var (mx, my) = Here.WorldToMap(territory, (gx + 0.5f) * 20f, (gz + 0.5f) * 20f);
+        var (mx, my) = Here.WorldToMap(territory, (gx + 0.5f) * Limits.OutdoorCellYalms, (gz + 0.5f) * Limits.OutdoorCellYalms);
         return mx > 0 && my > 0 ? $"({mx:0.0}, {my:0.0})" : "";
     }
 
@@ -139,13 +153,26 @@ internal static class NearbyScan
         _ => Limits.OutdoorLockWanderingMinutes,
     };
 
-    public static string TierName(int patrons, int score)
+    public static bool NearbyPockets(string? a, string? b)
     {
-        if (patrons >= 8 || score >= 6)
+        if (!TryParsePocket(a ?? "", out var wa, out var ta, out var gxa, out var gza))
+            return false;
+        if (!TryParsePocket(b ?? "", out var wb, out var tb, out var gxb, out var gzb))
+            return false;
+        if (!string.Equals(wa, wb, StringComparison.OrdinalIgnoreCase) || ta != tb)
+            return false;
+        return Math.Max(Math.Abs(gxa - gxb), Math.Abs(gza - gzb)) <= 2;
+    }
+
+    public static string OutdoorTier(int nearby, int zone)
+    {
+        nearby = Math.Min(99, nearby);
+        zone = Math.Min(99, zone);
+        if (nearby >= 40 || zone >= 80)
             return "extremely_busy";
-        if (patrons >= 4 || score >= 4)
+        if (nearby >= 15 || zone >= 40)
             return "some_activity";
-        if (patrons >= 1 || score >= 1)
+        if (nearby >= 4)
             return "some_wandering";
         return "";
     }
@@ -284,6 +311,23 @@ internal static class NearbyScan
             score++;
 
         return new Crowd(visible, familiar, patrons.Count, score, inCharacter, seeking, bench, glance, voices, emotes);
+    }
+
+    private static (Crowd Nearby, int Zone) CountOutdoor(Plugin plugin, IPlayerCharacter self)
+    {
+        var nearby = CountNearby(plugin, self, Limits.OutdoorRangeYalms);
+        var zone = 0;
+        foreach (var obj in Plugin.ObjectTable)
+        {
+            if (obj is null || obj.ObjectKind != ObjectKind.Pc || obj is not IPlayerCharacter pc)
+                continue;
+            if (pc.EntityId == self.EntityId)
+                continue;
+            zone++;
+            if (zone >= 99)
+                break;
+        }
+        return (nearby, zone);
     }
 
     private static bool IsEmoting(IPlayerCharacter pc)

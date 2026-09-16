@@ -12,7 +12,7 @@ Copy sits between OOC and IC.
 | **open!** | Lean toward company |
 | **open~** | Split |
 | **"open"** | Hours on, audit quiet |
-| **Extremely busy** / **Some activity** / **Some wandering** | Outdoor pocket. Not used to rank venues. |
+| **Extremely busy** / **Some activity** / **Some wandering** | Outdoor pocket. Nearby crowd, not venue occupancy. |
 | **IC** | Role-Playing status in range |
 
 Yard and inside list separately. The room weighs more. Ward + Plot is a house. Apartments use Ward + Apt, plus Subdivision when the listing is in one.

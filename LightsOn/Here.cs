@@ -90,8 +90,8 @@ internal static class Here
     {
         if (!NearbyScan.TryParsePocket(pocket, out _, out var territory, out var gx, out var gz))
             return false;
-        var worldX = (gx + 0.5f) * 20f;
-        var worldZ = (gz + 0.5f) * 20f;
+        var worldX = (gx + 0.5f) * Limits.OutdoorCellYalms;
+        var worldZ = (gz + 0.5f) * Limits.OutdoorCellYalms;
         return Flag(territory, worldX, worldZ);
     }
 

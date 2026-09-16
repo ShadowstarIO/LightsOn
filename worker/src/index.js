@@ -2,13 +2,14 @@ const WINDOW_MS = 4 * 60 * 60 * 1000;
 const RATE_MS = 45 * 1000;
 const NOTE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const NOTE_RATE_MS = 60 * 60 * 1000;
-const OUTDOOR_MS = 20 * 60 * 1000;
+const OUTDOOR_MS = 4 * 60 * 60 * 1000;
 const MAX_BODY = 8 * 1024;
 const VENUES_URL = "https://api.ffxivvenues.com/venue";
-const UA = "LightsOn/0.0.4.6 (+https://github.com/XozaShadow/LightsOn)";
+const UA = "LightsOn/0.0.4.7 (+https://github.com/XozaShadow/LightsOn)";
 const TIER_RANK = { extremely_busy: 3, some_activity: 2, some_wandering: 1 };
-const OUTDOOR_LOCK_MS = { extremely_busy: 3 * 60 * 1000, some_activity: 8 * 60 * 1000, some_wandering: 20 * 60 * 1000 };
-const OUTDOOR_UPGRADE_MS = 3 * 60 * 1000;
+const OUTDOOR_LOCK_MS = { extremely_busy: 5 * 60 * 1000, some_activity: 8 * 60 * 1000, some_wandering: 20 * 60 * 1000 };
+const OUTDOOR_UPGRADE_MS = 5 * 60 * 1000;
+const OUTDOOR_NEAR_MS = 5 * 60 * 1000;
 const venueCache = new Map();
 let migrateTried = false;
 
@@ -426,18 +427,13 @@ async function postNote(env, request) {
 }
 
 async function getOutdoors(env) {
+  await migrate(env);
   const since = new Date(Date.now() - OUTDOOR_MS).toISOString();
   const { results } = await env.DB.prepare(
-    `SELECT pocket, world, place,
-            MAX(CASE tier
-              WHEN 'extremely_busy' THEN 3
-              WHEN 'some_activity' THEN 2
-              ELSE 1 END) AS rank,
-            MAX(in_character) AS in_character,
-            COUNT(DISTINCT reporter_id) AS reports,
-            MAX(at) AS updated_at
+    `SELECT pocket, world, place, zone, tier, in_character, patrons, zone_count,
+            voices, glance, emotes, score, activity, at AS updated_at
      FROM outdoors WHERE at >= ?
-     GROUP BY pocket, world, place`,
+     ORDER BY at DESC LIMIT 200`,
   ).bind(since).all();
 
   const votes = await env.DB.prepare(
@@ -452,28 +448,39 @@ async function getOutdoors(env) {
   for (const v of votes.results ?? [])
     voteMap.set(v.pocket, v);
 
+  const hidden = new Set();
+  for (const [pocket, v] of voteMap) {
+    if (!v || v.n <= 0)
+      continue;
+    const yes = Number(v.yes) / Number(v.n);
+    const no = Number(v.no) / Number(v.n);
+    if (yes >= 0.33 && no < 0.25)
+      hidden.add(pocket);
+  }
+
   const out = [];
   for (const row of results ?? []) {
-    const v = voteMap.get(row.pocket);
-    if (v && v.n > 0) {
-      const yes = Number(v.yes) / Number(v.n);
-      const no = Number(v.no) / Number(v.n);
-      if (yes >= 0.33 && no < 0.25)
-        continue;
-    }
-    const tier = Number(row.rank) >= 3 ? "extremely_busy" : Number(row.rank) >= 2 ? "some_activity" : "some_wandering";
+    if (hidden.has(row.pocket))
+      continue;
     out.push({
       pocket: row.pocket,
       world: row.world,
       place: row.place,
-      tier,
+      zone: row.zone || "",
+      tier: row.tier,
       inCharacter: Number(row.in_character) === 1,
-      reports: Number(row.reports || 0),
+      patrons: Math.min(99, Number(row.patrons || 0)),
+      zoneCount: Math.min(99, Number(row.zone_count || 0)),
+      voices: Number(row.voices) === 1,
+      glance: Number(row.glance) === 1,
+      emotes: Number(row.emotes) === 1,
+      score: Number(row.score || 0),
+      activity: row.activity || "",
+      reports: 1,
       updatedAt: row.updated_at,
     });
   }
-  out.sort((a, b) => (TIER_RANK[b.tier] || 0) - (TIER_RANK[a.tier] || 0));
-  return out.slice(0, 80);
+  return out;
 }
 
 async function postOutdoor(env, request) {
@@ -489,25 +496,48 @@ async function postOutdoor(env, request) {
     return json({ error: "bad tier" }, 400);
   const world = String(body.world || "").trim().slice(0, 32);
   const place = String(body.place || "").trim().slice(0, 64);
+  const zone = String(body.zone || "").trim().slice(0, 64);
   if (world.length < 2 || place.length < 2)
     return json({ error: "world and place required" }, 400);
+  const activity = String(body.activity || "").trim();
+  if (activity && !OUTDOOR_SCENES.has(activity))
+    return json({ error: "pick a scene from the list" }, 400);
 
   const now = new Date();
+  const nearSince = new Date(now.getTime() - OUTDOOR_NEAR_MS).toISOString();
+  const recent = await env.DB.prepare(
+    "SELECT pocket, tier, at FROM outdoors WHERE reporter_id = ? AND at >= ? ORDER BY at DESC LIMIT 24",
+  ).bind(body.reporterId, nearSince).all();
+  if ((recent.results ?? []).some((row) => nearbyPocket(row.pocket, body.pocket)))
+    return json({ error: "already reported near here" }, 429);
+
   const last = await env.DB.prepare(
-    "SELECT tier, at FROM outdoors WHERE reporter_id = ? AND pocket = ? ORDER BY at DESC LIMIT 1",
-  ).bind(body.reporterId, body.pocket).first();
-  if (last) {
-    const age = now.getTime() - new Date(last.at).getTime();
-    const lastRank = TIER_RANK[last.tier] || 0;
+    "SELECT pocket, tier, at FROM outdoors WHERE reporter_id = ? ORDER BY at DESC LIMIT 8",
+  ).bind(body.reporterId).all();
+  for (const row of last.results ?? []) {
+    if (!nearbyPocket(row.pocket, body.pocket))
+      continue;
+    const age = now.getTime() - new Date(row.at).getTime();
+    const lastRank = TIER_RANK[row.tier] || 0;
     const nextRank = TIER_RANK[tier] || 0;
-    const need = nextRank > lastRank ? OUTDOOR_UPGRADE_MS : (OUTDOOR_LOCK_MS[last.tier] || OUTDOOR_MS);
+    const need = nextRank > lastRank ? OUTDOOR_UPGRADE_MS : (OUTDOOR_LOCK_MS[row.tier] || OUTDOOR_MS);
     if (age < Math.max(RATE_MS, need))
-      return json({ error: "already noted this pocket recently" }, 429);
+      return json({ error: "already reported this pocket recently" }, 429);
+    break;
   }
 
+  const patrons = Math.max(0, Math.min(99, Number(body.patrons) || 0));
+  const zoneCount = Math.max(0, Math.min(99, Number(body.zoneCount) || 0));
+  const score = Math.max(0, Math.min(20, Number(body.score) || 0));
   await env.DB.prepare(
-    "INSERT INTO outdoors (pocket, world, place, tier, in_character, reporter_id, at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-  ).bind(body.pocket, world, place, tier, body.inCharacter ? 1 : 0, body.reporterId, now.toISOString()).run();
+    `INSERT INTO outdoors (pocket, world, place, zone, tier, in_character, patrons, zone_count,
+       voices, glance, emotes, score, activity, reporter_id, at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).bind(
+    body.pocket, world, place, zone, tier, body.inCharacter ? 1 : 0,
+    patrons, zoneCount, body.voices ? 1 : 0, body.glance ? 1 : 0, body.emotes ? 1 : 0,
+    score, activity, body.reporterId, now.toISOString(),
+  ).run();
 
   if (typeof body.privateGathering === "boolean") {
     await env.DB.prepare(
@@ -516,6 +546,18 @@ async function postOutdoor(env, request) {
     ).bind(body.pocket, body.reporterId, body.privateGathering ? 1 : 0, now.toISOString()).run();
   }
   return json({ ok: true });
+}
+
+function nearbyPocket(a, b) {
+  const pa = String(a || "").split("|");
+  const pb = String(b || "").split("|");
+  if (pa.length !== 4 || pb.length !== 4)
+    return a === b;
+  if (pa[0] !== pb[0] || pa[1] !== pb[1])
+    return false;
+  const dx = Math.abs(Number(pa[2]) - Number(pb[2]));
+  const dz = Math.abs(Number(pa[3]) - Number(pb[3]));
+  return Math.max(dx, dz) <= 2;
 }
 
 async function readJson(request) {
@@ -532,6 +574,7 @@ async function readJson(request) {
 const LOG_ADJ = ["Bright", "Calm", "Cheerful", "Cozy", "Easy", "Fair", "Fine", "Fresh", "Friendly", "Gentle", "Good", "Great", "Happy", "Inviting", "Kind", "Light", "Lively", "Lovely", "Mellow", "Nice", "Open", "Peaceful", "Pleasant", "Polite", "Quiet", "Relaxed", "Smooth", "Soft", "Steady", "Sweet", "Warm", "Welcoming"];
 const LOG_NOUN = ["Air", "Bar", "Chat", "Company", "Corner", "Crowd", "Door", "Drinks", "Energy", "Entry", "Floor", "Food", "Hall", "Host", "Lights", "Mix", "Mood", "Music", "Night", "Room", "Scene", "Seats", "Set", "Space", "Staff", "Stage", "Vibe", "Wait", "Walk", "Welcome", "Yard"];
 const LOG_PHRASES = new Set(LOG_ADJ.flatMap((a) => LOG_NOUN.map((n) => `${a} ${n}`)));
+const OUTDOOR_SCENES = new Set(["Camp", "Dance", "Event", "Fight", "Hunt", "Market", "Parade", "Party", "Performance", "RP", "Social"]);
 
 function sanitizeNote(raw) {
   const s = String(raw || "").replace(/\s+/g, " ").trim();
@@ -772,12 +815,25 @@ async function migrate(env) {
     ["occupancy", "exterior_wrapped"],
     ["occupancy", "door_locked"],
     ["occupancy", "both_layers"],
+    ["outdoors", "patrons"],
+    ["outdoors", "zone_count"],
+    ["outdoors", "voices"],
+    ["outdoors", "glance"],
+    ["outdoors", "emotes"],
+    ["outdoors", "score"],
   ];
   for (const [table, col] of cols) {
     try {
       await ensureColumn(env, table, col);
     } catch (err) {
       console.error("migrate", table, col, err);
+    }
+  }
+  for (const col of ["zone", "activity"]) {
+    try {
+      await ensureTextColumn(env, "outdoors", col);
+    } catch (err) {
+      console.error("migrate outdoors", col, err);
     }
   }
 }
@@ -787,5 +843,12 @@ async function ensureColumn(env, table, col) {
   if ((results || []).some((row) => row.name === col))
     return;
   await env.DB.prepare(`ALTER TABLE ${table} ADD COLUMN ${col} INTEGER DEFAULT 0`).run();
+}
+
+async function ensureTextColumn(env, table, col) {
+  const { results } = await env.DB.prepare(`PRAGMA table_info(${table})`).all();
+  if ((results || []).some((row) => row.name === col))
+    return;
+  await env.DB.prepare(`ALTER TABLE ${table} ADD COLUMN ${col} TEXT NOT NULL DEFAULT ''`).run();
 }
 
