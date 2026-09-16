@@ -28,8 +28,7 @@ internal static class Lifestream
             return $"{loc.World}, {loc.District}, W{loc.Ward}{sub}, Apartment {loc.RoomNo}";
         }
 
-        var plot = loc.HousePlot;
-        return $"{loc.World}, {loc.District}, W{loc.Ward}, P{plot}";
+        return $"{loc.World}, {loc.District}, W{loc.Ward}, P{loc.HousePlot}";
     }
 
     public static void Copy(VenueLocation loc)
@@ -42,32 +41,14 @@ internal static class Lifestream
     {
         if (!Reach.CanVisitWorld(loc.World))
             return;
-        if (TryGoIpc(loc))
-            return;
-        var place = loc.IsApartment
-            ? $"w{loc.Ward} {loc.RoomNo}"
-            : $"w{loc.Ward} p{loc.HousePlot}";
-        var args = $"{loc.World}, {loc.District}, {place}";
-        Plugin.PluginInterface.GetIpcSubscriber<string, object>("Lifestream.ExecuteCommand").InvokeAction(args);
-    }
-
-    private static bool TryGoIpc(VenueLocation loc)
-    {
+        var line = Share(loc);
         try
         {
-            var build = Plugin.PluginInterface.GetIpcSubscriber<string, string, string, string, bool, bool, object>(
-                "Lifestream.BuildAddressBookEntry");
-            var go = Plugin.PluginInterface.GetIpcSubscriber<object, object>("Lifestream.GoToHousingAddress");
-            var num = loc.IsApartment ? loc.RoomNo.ToString() : loc.HousePlot.ToString();
-            var entry = build.InvokeFunc(
-                loc.World, loc.District, loc.Ward.ToString(), num, loc.IsApartment, loc.Subdivision);
-            go.InvokeAction(entry);
-            return true;
+            Plugin.PluginInterface.GetIpcSubscriber<string, object>("Lifestream.ExecuteCommand").InvokeAction(line);
         }
         catch (Exception ex)
         {
-            Plugin.Log.Verbose(ex, "Lifestream housing IPC");
-            return false;
+            Plugin.Log.Verbose(ex, "Lifestream");
         }
     }
 }

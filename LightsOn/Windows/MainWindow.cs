@@ -327,13 +327,13 @@ public sealed class MainWindow : Window
             .Select(v => new { Dc = v.Location?.DataCenter ?? "", World = v.Location?.World ?? "" })
             .Concat(plugin.Outdoors.Select(o => new { Dc = Reach.DataCenterOf(o.World), World = o.World }))
             .Where(x => x.World.Length > 0)
-            .Where(x => dcPick.Length == 0 || string.Equals(x.Dc, dcPick, StringComparison.OrdinalIgnoreCase))
+            .Where(x => showOther || dcPick.Length == 0 || string.Equals(x.Dc, dcPick, StringComparison.OrdinalIgnoreCase))
             .Select(x => x.World)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Where(s => showOther || Reach.CanVisitWorld(s))
             .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
             .ToList();
-        if (worldPick.Length > 0 && !worlds.Contains(worldPick, StringComparer.OrdinalIgnoreCase))
+        if (!showOther && worldPick.Length > 0 && !worlds.Contains(worldPick, StringComparer.OrdinalIgnoreCase))
             worldPick = "";
 
         ImGui.SetNextItemWidth(180);
@@ -362,13 +362,31 @@ public sealed class MainWindow : Window
         else
             ImGui.Combo("##ostatus", ref outdoorFilter, OutdoorFilters, OutdoorFilters.Length);
         ImGui.SameLine();
-        if (ImGui.Checkbox("Other Regions", ref showOther))
+        if (ImGui.Checkbox("All Regions", ref showOther))
         {
             plugin.Configuration.ShowOtherRegions = showOther;
             plugin.Configuration.Save();
         }
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Worlds you cannot visit from this character. Off by default.");
+            ImGui.SetTooltip("Every data center and world in the lists, including ones you cannot visit.");
+        ImGui.SameLine();
+        if (ImGui.SmallButton("Clear"))
+            ClearFilters(venues);
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Clear search, data center, world, and status.");
+    }
+
+    private void ClearFilters(bool venues)
+    {
+        query = "";
+        dcPick = "";
+        worldPick = "";
+        dcFilter = "";
+        worldFilter = "";
+        if (venues)
+            venueFilter = 0;
+        else
+            outdoorFilter = 0;
     }
 
     private bool MatchesVenue(VenueListing venue)
