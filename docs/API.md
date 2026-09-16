@@ -19,7 +19,9 @@ Windows: occupancy while posted hours are on, **up to 4 hours**, weight `1 / max
 | GET | `/v1/notes?venueId=` | Active log-book lines. Phrases only. |
 | GET | `/v1/outdoors` | Outdoor reports, last 4 hours. Pocket, world, place, zone, tier, nearby/zone counts (cap 99), chips, optional scene. No names. |
 
-Cached about 60s. CORS is open for GET.
+Cached about 60s, including `/` and `/v1/health`. CORS is open for GET.
+
+Read limits: **30 GET/minute per IP**. Plugins that send a User-Agent (or `X-LightsOn-Client`) starting with `LightsOn/`, `StatusShift/`, or `Shadowstar/` get **120/minute**. Poll occupancy every 30s or slower; the snapshot is already cached ~60s. Over the cap returns **429** with `Retry-After`. To get a plugin on the higher cap, use a stable User-Agent `YourPlugin/1.0 (+url)` and ask to add the prefix (`READ_ALLOW` on the worker).
 
 Lean is interior×2 + exterior, happening minus quiet, each report weighted by age (`1 / max(1, hours)`). Unique reporters; latest per person per layer. Venue occupancy does not publish a headcount. Outdoors publishes nearby/zone counts (99+).
 

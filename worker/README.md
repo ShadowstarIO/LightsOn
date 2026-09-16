@@ -1,6 +1,6 @@
 # LightsOn occupancy worker
 
-GitHub Actions deploys this. Public GET is cached (~60s). Cron every 5 minutes. Directory refresh at most every 30 minutes. History 14 days.
+Public GET is cached (~60s), including `/` and `/v1/health`. Anonymous reads 30/minute per IP; LightsOn / StatusShift / Shadowstar user-agents 120/minute. Extra prefixes: worker secret/var `READ_ALLOW`.
 
 Host: `https://lightson.shadowstar.io`. Aliases: `https://lightson.xoza.net`, `workers.dev`.
 

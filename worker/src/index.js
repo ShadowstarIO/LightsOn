@@ -17,12 +17,17 @@ const OUTDOOR_LOCK_MS = {
 const OUTDOOR_UPGRADE_MS = 5 * 60 * 1000;
 const OUTDOOR_NEAR_MS = 5 * 60 * 1000;
 const venueCache = new Map();
+const getHits = new Map();
 let migrateTried = false;
+const GET_ANON = 30;
+const GET_PLUGIN = 120;
+const GET_WINDOW_MS = 60_000;
+const READ_PREFIX = ["LightsOn/", "StatusShift/", "Shadowstar/"];
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, X-LightsOn-Key",
+  "Access-Control-Allow-Headers": "Content-Type, X-LightsOn-Key, X-LightsOn-Client",
   "Access-Control-Max-Age": "86400",
 };
 
@@ -33,18 +38,29 @@ export default {
 
     try {
       const url = new URL(request.url);
-      if (request.method === "GET" && url.pathname === "/")
-        return json({ name: "LightsOn", windowMinutes: 240, occupancyHours: 4, occupancy: "/v1/occupancy" });
-      if (request.method === "GET" && url.pathname === "/v1/health")
-        return json(await health(env));
-      if (request.method === "GET" && url.pathname === "/v1/occupancy")
-        return cachedGet(request, ctx, 60, () => getOccupancy(env, url.searchParams));
-      if (request.method === "GET" && url.pathname === "/v1/outdoors")
-        return cachedGet(request, ctx, 60, () => getOutdoors(env));
-      if (request.method === "GET" && url.pathname === "/v1/notes")
-        return cachedGet(request, ctx, 60, () => getNotes(env, url.searchParams.get("venueId") || ""));
-      if (request.method === "GET" && url.pathname === "/v1/reports")
-        return cachedGet(request, ctx, 60, () => getReportLog(env, url.searchParams.get("venueId") || ""));
+      if (request.method === "GET")
+      {
+        const wait = readWait(request, env);
+        if (wait > 0)
+          return tooMany(wait);
+        if (url.pathname === "/")
+          return cachedGet(request, ctx, 60, () => ({
+            name: "LightsOn",
+            windowMinutes: 240,
+            occupancyHours: 4,
+            occupancy: "/v1/occupancy",
+          }));
+        if (url.pathname === "/v1/health")
+          return cachedGet(request, ctx, 60, () => health(env));
+        if (url.pathname === "/v1/occupancy")
+          return cachedGet(request, ctx, 60, () => getOccupancy(env, url.searchParams));
+        if (url.pathname === "/v1/outdoors")
+          return cachedGet(request, ctx, 60, () => getOutdoors(env));
+        if (url.pathname === "/v1/notes")
+          return cachedGet(request, ctx, 60, () => getNotes(env, url.searchParams.get("venueId") || ""));
+        if (url.pathname === "/v1/reports")
+          return cachedGet(request, ctx, 60, () => getReportLog(env, url.searchParams.get("venueId") || ""));
+      }
       if (request.method === "POST")
       {
         if (!ingestOk(request, env))
@@ -77,6 +93,59 @@ export default {
 };
 
 const postHits = [];
+
+function clientIp(request) {
+  return request.headers.get("CF-Connecting-IP")
+    || (request.headers.get("X-Forwarded-For") || "").split(",")[0].trim()
+    || "0";
+}
+
+function readPrefixes(env) {
+  const extra = String(env.READ_ALLOW || "")
+    .split(/[;,\n]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return extra.length ? READ_PREFIX.concat(extra) : READ_PREFIX;
+}
+
+function isNamedReader(request, env) {
+  const ua = request.headers.get("User-Agent") || "";
+  const client = request.headers.get("X-LightsOn-Client") || "";
+  return readPrefixes(env).some((p) => ua.startsWith(p) || client.startsWith(p));
+}
+
+function readWait(request, env) {
+  const ip = clientIp(request);
+  const cap = isNamedReader(request, env) ? GET_PLUGIN : GET_ANON;
+  const now = Date.now();
+  if (getHits.size > 4000) {
+    for (const [k, row] of getHits) {
+      if (now - row.t > GET_WINDOW_MS)
+        getHits.delete(k);
+    }
+  }
+  let row = getHits.get(ip);
+  if (!row || now - row.t > GET_WINDOW_MS) {
+    row = { n: 0, t: now };
+    getHits.set(ip, row);
+  }
+  row.n++;
+  if (row.n <= cap)
+    return 0;
+  return Math.max(1, Math.ceil((GET_WINDOW_MS - (now - row.t)) / 1000));
+}
+
+function tooMany(retrySec) {
+  return new Response(JSON.stringify({ error: "slow down", retry: retrySec }), {
+    status: 429,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "Retry-After": String(retrySec),
+      "Cache-Control": "no-store",
+      ...CORS,
+    },
+  });
+}
 
 async function limited(request, fn) {
   const now = Date.now();
