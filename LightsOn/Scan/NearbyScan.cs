@@ -395,17 +395,20 @@ internal static class NearbyScan
         }
     }
 
-    public static bool MatchesVenue(VenueListing venue)
+    public static bool MatchesVenue(VenueListing? venue)
     {
-        var loc = venue.Location;
+        var loc = venue?.Location;
         if (loc is null)
             return false;
-        if (!string.Equals(CurrentWorldName(), loc.World.Trim(), StringComparison.OrdinalIgnoreCase))
+        var world = loc.World ?? "";
+        var district = loc.District ?? "";
+        if (!string.Equals(CurrentWorldName(), world.Trim(), StringComparison.OrdinalIgnoreCase))
             return false;
 
         var here = HousingReader.Read();
-        if (loc.District.Length > 0 && here.District.Length > 0
-            && !HousingReader.SameDistrict(here.District, loc.District))
+        var hereDistrict = here.District ?? "";
+        if (district.Length > 0 && hereDistrict.Length > 0
+            && !HousingReader.SameDistrict(hereDistrict, district))
             return false;
         if (here.Ward != loc.Ward)
             return false;

@@ -114,7 +114,7 @@ internal static class HousingReader
         }
 
         if (ward is < 1 or > 30)
-            return default;
+            return new HousingAddress(false, "", 0, 0, 0, false);
 
         var subdivision = division == 2;
         if (apartment)
