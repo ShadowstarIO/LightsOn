@@ -2,8 +2,8 @@
 
 Public **GET**. Other plugins and sites can read the same occupancy the list uses. No names, no reporter ids.
 
-Host: `https://lightson.xoza.net`  
-Fallback: `https://REDACTED`
+Host: `https://lightson.shadowstar.io`  
+Fallbacks: `https://lightson.xoza.net`, `https://REDACTED`
 
 Writes (**POST**) are not a public API. They require a private ingest key compiled into the shipping plugin.
 
