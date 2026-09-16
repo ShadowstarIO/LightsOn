@@ -92,7 +92,7 @@ internal static class NearbyScan
     {
         var player = Plugin.ObjectTable.LocalPlayer;
         if (player is null)
-            return default;
+            return new OutdoorScan("", "", "", "", "", 0, 0, 0, false, false, false, false, 0, 0, "", "", default, 0, 0);
 
         var world = CurrentWorldName();
         var (region, place, kind) = Zone.Describe(Plugin.ClientState.TerritoryType);
