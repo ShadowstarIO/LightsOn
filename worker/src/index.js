@@ -5,7 +5,7 @@ const NOTE_RATE_MS = 24 * 60 * 60 * 1000;
 const OUTDOOR_MS = 20 * 60 * 1000;
 const MAX_BODY = 8 * 1024;
 const VENUES_URL = "https://api.ffxivvenues.com/venue";
-const UA = "LightsOn/0.0.4.2 (+https://github.com/XozaShadow/LightsOn)";
+const UA = "LightsOn/0.0.4.4 (+https://github.com/XozaShadow/LightsOn)";
 const TIER_RANK = { extremely_busy: 3, some_activity: 2, some_wandering: 1 };
 const OUTDOOR_LOCK_MS = { extremely_busy: 3 * 60 * 1000, some_activity: 8 * 60 * 1000, some_wandering: 20 * 60 * 1000 };
 const OUTDOOR_UPGRADE_MS = 3 * 60 * 1000;
@@ -75,13 +75,15 @@ async function limited(request, fn) {
   const now = Date.now();
   while (postHits.length && now - postHits[0] > 60_000)
     postHits.shift();
-  if (postHits.length > 30)
+  if (postHits.length > 80)
     return json({ error: "Too many updates right now. Try again in a minute." }, 429);
   const len = Number(request.headers.get("content-length") || 0);
   if (len > MAX_BODY)
     return json({ error: "payload too large" }, 413);
-  postHits.push(now);
-  return fn();
+  const res = await fn();
+  if (res.status < 400)
+    postHits.push(now);
+  return res;
 }
 
 async function cachedGet(request, ctx, ttlSec, builder) {
@@ -249,22 +251,33 @@ async function postReport(env, request) {
 
   const now = new Date();
   const at = parseAt(body.at, now);
-  const since = new Date(now.getTime() - RATE_MS).toISOString();
+  const windowSince = new Date(now.getTime() - WINDOW_MS).toISOString();
+  let existing = 0;
+  try {
+    const row = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM reports WHERE venue_id = ? AND at >= ?",
+    ).bind(body.venueId, windowSince).first();
+    existing = Number(row?.n || 0);
+  } catch { existing = 0; }
+  const need = existing === 0 ? 0 : existing < 3 ? 20 * 1000 : existing < 6 ? RATE_MS : 3 * 60 * 1000;
   const proof = body.proof;
   const inside = proof.inside ? 1 : 0;
   const door = proof.doorLocked ? 1 : 0;
-  let recent = null;
-  try {
-    recent = await env.DB.prepare(
-      "SELECT id FROM reports WHERE reporter_id = ? AND venue_id = ? AND kind = ? AND inside = ? AND door_locked = ? AND at >= ? LIMIT 1",
-    ).bind(body.reporterId, body.venueId, body.kind, inside, door, since).first();
-  } catch {
-    recent = await env.DB.prepare(
-      "SELECT id FROM reports WHERE reporter_id = ? AND venue_id = ? AND kind = ? AND inside = ? AND at >= ? LIMIT 1",
-    ).bind(body.reporterId, body.venueId, body.kind, inside, since).first();
+  if (need > 0) {
+    const since = new Date(now.getTime() - need).toISOString();
+    let recent = null;
+    try {
+      recent = await env.DB.prepare(
+        "SELECT id FROM reports WHERE reporter_id = ? AND venue_id = ? AND kind = ? AND inside = ? AND door_locked = ? AND at >= ? LIMIT 1",
+      ).bind(body.reporterId, body.venueId, body.kind, inside, door, since).first();
+    } catch {
+      recent = await env.DB.prepare(
+        "SELECT id FROM reports WHERE reporter_id = ? AND venue_id = ? AND kind = ? AND inside = ? AND at >= ? LIMIT 1",
+      ).bind(body.reporterId, body.venueId, body.kind, inside, since).first();
+    }
+    if (recent)
+      return json({ error: "already reported this recently" }, 429);
   }
-  if (recent)
-    return json({ error: "already reported this recently" }, 429);
 
   try {
     await env.DB.prepare(
@@ -690,14 +703,16 @@ async function recomputeAll(env) {
 
 async function lookupVenue(id) {
   const cached = venueCache.get(id);
-  if (cached && Date.now() - cached.at < 30 * 60 * 1000)
-    return cached.row;
-  const res = await fetch(`${VENUES_URL}/${encodeURIComponent(id)}`, { headers: { "User-Agent": UA } });
-  if (!res.ok)
-    return null;
-  const v = await res.json();
+  let v = cached && Date.now() - cached.at < 30 * 60 * 1000 ? cached.raw : null;
+  if (!v) {
+    const res = await fetch(`${VENUES_URL}/${encodeURIComponent(id)}`, { headers: { "User-Agent": UA } });
+    if (!res.ok)
+      return null;
+    v = await res.json();
+    venueCache.set(id, { at: Date.now(), raw: v });
+  }
   const loc = v.location || {};
-  const row = {
+  return {
     id: String(v.id || id),
     world: String(loc.world || ""),
     district: String(loc.district || ""),
@@ -707,13 +722,27 @@ async function lookupVenue(id) {
     subdivision: loc.subdivision ? 1 : 0,
     open_now: venueIsOpen(v) ? 1 : 0,
   };
-  venueCache.set(id, { at: Date.now(), row });
-  return row;
 }
 
 function venueIsOpen(v) {
+  if (spanIsNow(v?.resolution) || v?.resolution?.isNow)
+    return true;
+  const overrides = Array.isArray(v.scheduleOverrides) ? v.scheduleOverrides : [];
+  if (overrides.some((o) => o && o.open && (spanIsNow(o) || o.isNow)))
+    return true;
   const sched = Array.isArray(v.schedule) ? v.schedule : [];
-  return sched.some((s) => s?.resolution?.isNow);
+  return sched.some((s) => spanIsNow(s?.resolution) || s?.resolution?.isNow);
+}
+
+function spanIsNow(span) {
+  if (!span || !span.start || !span.end)
+    return false;
+  const a = Date.parse(span.start);
+  const b = Date.parse(span.end);
+  if (!Number.isFinite(a) || !Number.isFinite(b))
+    return false;
+  const n = Date.now();
+  return n >= a && n < b;
 }
 
 async function pruneClosed(env) {
