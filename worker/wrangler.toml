@@ -8,6 +8,10 @@ account_id = "db80b407c9444b69c5bc38bbe07efb38"
 crons = ["*/5 * * * *"]
 
 [[routes]]
+pattern = "lightson.shadowstar.io"
+custom_domain = true
+
+[[routes]]
 pattern = "lightson.xoza.net"
 custom_domain = true
 
