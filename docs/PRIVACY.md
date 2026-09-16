@@ -10,7 +10,8 @@ LightsOn answers “is anyone at this listed venue?” and “is there a scene i
 - The numeric score used for “enough company”
 - Online-status labels (IC, Party Finder, melding)
 - Who is targeted / targeting you (glances)
-- That a tell, party line, or say happened with someone already in the scan — never the text
+- That a tell, party line, say, or emote happened with someone already in the audit — never the text
+- That a nearby patron is looping an emote — never which emote
 
 Those never leave the machine.
 

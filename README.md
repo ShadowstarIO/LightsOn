@@ -22,9 +22,9 @@ Every drop is testing-only until there is an explicit live release.
 
 Off until **Send Reports** is on. Never uploaded: names, IDs, friend or Free Company lists, or a headcount.
 
-A check can be sent from the yard or the room. They list separately. The room weighs more. Ward + Plot is the property. `sub` is only for apartments.
+A check can be sent from the yard or the room. They list separately. The room weighs more. Ward + Plot is the property. Apartments use Ward + Apt (Subdivision when it is one).
 
-Quiet is always a button. Lanterns may send themselves, then taper off as more people agree.
+Quiet is always a button. Lanterns may send themselves, then taper off as more people agree. After three different listed places in a night, sends wait 20 seconds instead of 45.
 
 Public occupancy lasts while posted hours are on, **up to 4 hours**. Older reports fade (each hour divides their weight), so a fresh quiet can beat a stale busy. Log-book notes: **7 days**, cap 12, after about 8 minutes on the property.
 
@@ -34,7 +34,7 @@ Two lists, not free-form. Example: *Kind host*, *Warm music*. One note per perso
 
 ## Outdoors
 
-A second tab for short-range street scenes. **Scan** and stay in the area (about a minute; busier scenes finish sooner), or wait about 10 minutes. Private gatherings can be kept off the list. The public list is about 20 minutes.
+A second tab for short-range street scenes. **Audit** and stay in the area (about a minute; busier scenes finish sooner), or wait about 10 minutes. Private gatherings can be kept off the list. The public list is about 20 minutes.
 
 ## Commands
 

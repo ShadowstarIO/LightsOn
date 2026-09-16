@@ -28,6 +28,17 @@ internal static class UiTheme
             ImGui.SetTooltip(text);
     }
 
+    public static void DrawHere(string line, bool sameLine)
+    {
+        if (sameLine)
+            ImGui.SameLine(0, 12);
+        ImGui.TextDisabled("Current Location:");
+        ImGui.SameLine(0, 6);
+        ImGui.TextColored(Teal, line);
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Where you are. Star is people in range, not a zone census.");
+    }
+
     public static Vector4 AgeColor(DateTimeOffset? at)
     {
         var mins = at is null ? 0 : Math.Max(0, (int)(DateTimeOffset.UtcNow - at.Value).TotalMinutes);

@@ -33,6 +33,7 @@ public sealed class ConfigWindow : Window
         Line("Party Finder", "Looking for Party is up. +1.");
         Line("Melding", "This status is on a player. +1. How they use it is their business.");
         Line("Glances", "You looked at someone, they looked at you, or they looked at each other. +1 total.");
+        Line("Emotes", "A patron is emoting, looping an emote, or one fired in chat. +1 total. Verbose log not required.");
         Line("Contact", "Tell or party chat with a patron here. +1 total.");
         Line("Voices", "Say with a patron here. Off unless you turn it on. +1 total.");
         ImGui.TextDisabled("Enough company = score 3 on that layer. Yard is about one plot-edge. The room is everyone inside.");
@@ -67,7 +68,7 @@ public sealed class ConfigWindow : Window
             cfg.AutoHappening = auto;
             cfg.Save();
         }
-        UiTheme.Hint("Sends lanterns when the scan is enough. Quiet is never automatic. Tapers off as more people agree.");
+        UiTheme.Hint("Sends lanterns when the audit is enough. Quiet is never automatic. Tapers off as more people agree.");
         if (cfg.ListingsOnly)
             ImGui.EndDisabled();
 
@@ -127,6 +128,14 @@ public sealed class ConfigWindow : Window
         }
         UiTheme.Hint("Looking at / looked at a patron. +1 total.");
 
+        var emotes = cfg.UseEmoteSignals;
+        if (ImGui.Checkbox("Count Emotes", ref emotes))
+        {
+            cfg.UseEmoteSignals = emotes;
+            cfg.Save();
+        }
+        UiTheme.Hint("Looping or in-place emotes, and emote chat. +1 total. Verbose log not required.");
+
         var chat = cfg.UseChatSignals;
         if (ImGui.Checkbox("Count Contact", ref chat))
         {
@@ -157,7 +166,7 @@ public sealed class ConfigWindow : Window
             cfg.NoteOutdoorScenes = outdoors;
             cfg.Save();
         }
-        UiTheme.Hint("Short-range street pockets. Scan and stay, or wait about 10 minutes. Busier scenes note sooner.");
+        UiTheme.Hint("Short-range street pockets. Audit and stay, or wait about 10 minutes. Busier scenes note sooner.");
 
         UiTheme.Gap();
         ImGui.Separator();

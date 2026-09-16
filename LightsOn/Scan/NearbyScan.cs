@@ -4,6 +4,7 @@ using System.Numerics;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Game.ClientState.Objects.Types;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using LightsOn.Api;
 using Lumina.Excel.Sheets;
 
@@ -20,6 +21,7 @@ public readonly record struct ScanResult(
     bool Voices,
     bool Seeking,
     bool Bench,
+    bool Emotes,
     string Summary)
 {
     public const int Threshold = Limits.Threshold;
@@ -46,13 +48,13 @@ internal static class NearbyScan
     {
         var player = Plugin.ObjectTable.LocalPlayer;
         if (player is null)
-            return new ScanResult(false, false, false, 0, 0, false, false, false, false, false, "Not logged in");
+            return new ScanResult(false, false, false, 0, 0, false, false, false, false, false, false, "Not logged in");
 
         var here = HousingReader.Read();
-        if (!here.OnPlot)
-            return new ScanResult(false, false, false, 0, 0, false, false, false, false, false, here.Summary);
+        if (!here.OnProperty)
+            return new ScanResult(false, false, false, 0, 0, false, false, false, false, false, false, here.Summary);
 
-        var tally = CountNearby(plugin, player, here.Inside ? 0f : Limits.YardRangeYalms);
+        var tally = CountNearby(plugin, player, here.Inside || here.OnApartment ? 0f : Limits.YardRangeYalms);
         var met = tally.Score >= ScanResult.Threshold;
         var who = plugin.Configuration.ExcludeFriends || plugin.Configuration.ExcludeFreeCompany ? "after filters" : "nearby";
         var bits = new List<string>();
@@ -68,10 +70,13 @@ internal static class NearbyScan
             bits.Add("a glance");
         if (tally.Voices)
             bits.Add("voices nearby");
+        if (tally.Emotes)
+            bits.Add("emotes");
         if (plugin.Session.HeardMusic)
             bits.Add("music");
         var summary = string.Join(" · ", bits) + " · " + here.Summary;
-        return new ScanResult(true, here.Inside, met, tally.Score, tally.Patrons, tally.InCharacter, tally.Glance, tally.Voices, tally.Seeking, tally.Bench, summary);
+        return new ScanResult(true, here.Inside || here.OnApartment, met, tally.Score, tally.Patrons, tally.InCharacter,
+            tally.Glance, tally.Voices, tally.Seeking, tally.Bench, tally.Emotes, summary);
     }
 
     public static OutdoorScan RunOutdoor(Plugin plugin)
@@ -156,12 +161,16 @@ internal static class NearbyScan
     public static bool OccupancyEligible(VenueListing venue)
     {
         var loc = venue.Location;
-        return loc is not null && loc.Plot is >= 1 and <= 60 && loc.Ward is >= 1 and <= 30;
+        if (loc is null || loc.Ward is < 1 or > 30)
+            return false;
+        if (loc.IsApartment)
+            return loc.RoomNo is >= 1 and <= 99;
+        return loc.HousePlot is >= 1 and <= 60;
     }
 
     private readonly record struct Crowd(
         int Visible, int Familiar, int Patrons, int Score,
-        bool InCharacter, bool Seeking, bool Bench, bool Glance, bool Voices);
+        bool InCharacter, bool Seeking, bool Bench, bool Glance, bool Voices, bool Emotes);
 
     private static Crowd CountNearby(Plugin plugin, IPlayerCharacter self, float maxRange)
     {
@@ -174,6 +183,7 @@ internal static class NearbyScan
         var inCharacter = false;
         var seeking = false;
         var bench = false;
+        var liveEmote = false;
 
         foreach (var obj in Plugin.ObjectTable)
         {
@@ -197,6 +207,8 @@ internal static class NearbyScan
             }
 
             patrons.Add(pc);
+            if (cfg.UseEmoteSignals && IsEmoting(pc))
+                liveEmote = true;
             if (!cfg.UseStatusSignals)
                 continue;
             var status = StatusName(pc);
@@ -252,6 +264,8 @@ internal static class NearbyScan
                 voices = true;
         }
 
+        var emotes = liveEmote || (cfg.UseEmoteSignals && plugin.Session.HeardEmote && patrons.Count > 0);
+
         var score = Math.Min(3, patrons.Count);
         if (cfg.UseStatusSignals)
         {
@@ -266,8 +280,26 @@ internal static class NearbyScan
             score++;
         if (voices && (cfg.UseChatSignals || cfg.UseSaySignals))
             score++;
+        if (emotes)
+            score++;
 
-        return new Crowd(visible, familiar, patrons.Count, score, inCharacter, seeking, bench, glance, voices);
+        return new Crowd(visible, familiar, patrons.Count, score, inCharacter, seeking, bench, glance, voices, emotes);
+    }
+
+    private static bool IsEmoting(IPlayerCharacter pc)
+    {
+        try
+        {
+            unsafe
+            {
+                var ch = (Character*)pc.Address;
+                return ch->Mode is CharacterModes.EmoteLoop or CharacterModes.InPositionLoop;
+            }
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public static string NormName(string raw)
@@ -309,17 +341,24 @@ internal static class NearbyScan
             return false;
 
         var here = HousingReader.Read();
-        if (!here.OnPlot)
+        if (loc.District.Length > 0 && here.District.Length > 0
+            && !HousingReader.SameDistrict(here.District, loc.District))
             return false;
         if (here.Ward != loc.Ward)
             return false;
-        var venuePlot = HousingReader.CanonicalPlot(loc.Plot, loc.Subdivision && loc.RoomNo == 0);
-        if (here.Plot != venuePlot)
+
+        if (loc.IsApartment)
+        {
+            if (!here.OnApartment)
+                return false;
+            if (here.Apartment != loc.RoomNo)
+                return false;
+            return here.Subdivision == loc.Subdivision;
+        }
+
+        if (!here.OnHouse)
             return false;
-        if (here.District.Length > 0 && loc.District.Length > 0
-            && !HousingReader.SameDistrict(here.District, loc.District))
-            return false;
-        return true;
+        return here.Plot == loc.HousePlot;
     }
 
     public static VenueListing? ListedHere(IEnumerable<VenueListing> venues)
@@ -335,9 +374,11 @@ internal static class NearbyScan
     public static string PlotKey()
     {
         var here = HousingReader.Read();
-        if (!here.OnPlot)
-            return "";
-        return $"{CurrentWorldName()}|{here.Ward}|{here.Plot}";
+        if (here.OnApartment)
+            return $"{CurrentWorldName()}|{here.Ward}|A{here.Apartment}|{(here.Subdivision ? 1 : 0)}";
+        if (here.OnHouse)
+            return $"{CurrentWorldName()}|{here.Ward}|{here.Plot}";
+        return "";
     }
 
     public static string CurrentWorldName()

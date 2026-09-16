@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Dalamud.Configuration;
 
 namespace LightsOn;
@@ -21,6 +22,7 @@ public sealed class Configuration : IPluginConfiguration
     public bool UseGlanceSignals { get; set; } = true;
     public bool UseChatSignals { get; set; } = true;
     public bool UseSaySignals { get; set; }
+    public bool UseEmoteSignals { get; set; } = true;
     public bool NoteOutdoorScenes { get; set; }
     public bool ListingsOnly { get; set; }
     public bool ShowOtherRegions { get; set; }
@@ -28,6 +30,8 @@ public sealed class Configuration : IPluginConfiguration
     public string OccupancyApiUrl { get; set; } = "https://lightson.wbro12-cloudflare.workers.dev";
     public long ReportEnabledAtUnix { get; set; }
     public long ReporterResetAtUnix { get; set; }
+    public string TourDay { get; set; } = "";
+    public List<string> TourVenues { get; set; } = [];
 
     public DateTimeOffset ReportEnabledAt =>
         ReportEnabledAtUnix > 0
@@ -69,6 +73,34 @@ public sealed class Configuration : IPluginConfiguration
     {
         ReporterId = Guid.NewGuid().ToString("N");
         ReporterResetAtUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+    }
+
+    public int TourCount
+    {
+        get
+        {
+            TrimTour();
+            return TourVenues.Count;
+        }
+    }
+
+    public void MarkTour(string venueId)
+    {
+        if (string.IsNullOrWhiteSpace(venueId))
+            return;
+        TrimTour();
+        if (!TourVenues.Exists(id => string.Equals(id, venueId, StringComparison.Ordinal)))
+            TourVenues.Add(venueId);
+        Save();
+    }
+
+    public void TrimTour()
+    {
+        var today = DateTime.Now.ToString("yyyy-MM-dd");
+        if (TourDay == today)
+            return;
+        TourDay = today;
+        TourVenues = [];
     }
 
     public void Save() => Plugin.PluginInterface.SavePluginConfig(this);

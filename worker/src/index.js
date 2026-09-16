@@ -5,7 +5,7 @@ const NOTE_RATE_MS = 24 * 60 * 60 * 1000;
 const OUTDOOR_MS = 20 * 60 * 1000;
 const MAX_BODY = 8 * 1024;
 const VENUES_URL = "https://api.ffxivvenues.com/venue";
-const UA = "LightsOn/0.0.4.1 (+https://github.com/XozaShadow/LightsOn)";
+const UA = "LightsOn/0.0.4.2 (+https://github.com/XozaShadow/LightsOn)";
 const TIER_RANK = { extremely_busy: 3, some_activity: 2, some_wandering: 1 };
 const OUTDOOR_LOCK_MS = { extremely_busy: 3 * 60 * 1000, some_activity: 8 * 60 * 1000, some_wandering: 20 * 60 * 1000 };
 const OUTDOOR_UPGRADE_MS = 3 * 60 * 1000;
@@ -545,7 +545,7 @@ function validateReport(body) {
     return "proof.thresholdMet required";
   if (body.kind === "happening" && !proof.thresholdMet)
     return "happening requires thresholdMet";
-  if (body.kind === "wrapped_up" && proof.thresholdMet)
+  if (body.kind === "wrapped_up" && proof.thresholdMet && !proof.doorLocked && !proof.unhosted)
     return "wrapped_up rejected when thresholdMet";
   return null;
 }
@@ -557,7 +557,12 @@ function plotLooksValid(proof) {
     return false;
   const ward = Number(proof.ward);
   const plot = Number(proof.plot);
-  return Number.isInteger(ward) && ward >= 1 && ward <= 30 && Number.isInteger(plot) && plot >= 1 && plot <= 60;
+  const apt = Number(proof.apartment) || 0;
+  if (!Number.isInteger(ward) || ward < 1 || ward > 30)
+    return false;
+  if (Number.isInteger(apt) && apt >= 1 && apt <= 99)
+    return true;
+  return Number.isInteger(plot) && plot >= 1 && plot <= 60;
 }
 
 function canonDistrict(s) {
@@ -585,6 +590,13 @@ function plotMatches(venue, proof) {
     return false;
   if (Number(venue.ward) !== Number(proof.ward))
     return false;
+  const venueApt = Number(venue.apartment) || 0;
+  if (venueApt > 0 && Number(venue.plot) === 0) {
+    const proofApt = Number(proof.apartment) || 0;
+    if (proofApt !== venueApt)
+      return false;
+    return !!venue.subdivision === !!proof.subdivision;
+  }
   if (canonPlot(venue.plot, venue.subdivision) !== canonPlot(proof.plot, proof.subdivision))
     return false;
   return true;
@@ -691,6 +703,7 @@ async function lookupVenue(id) {
     district: String(loc.district || ""),
     ward: Number(loc.ward) || 0,
     plot: Number(loc.plot) || 0,
+    apartment: Number(loc.apartment || loc.room) || 0,
     subdivision: loc.subdivision ? 1 : 0,
     open_now: venueIsOpen(v) ? 1 : 0,
   };

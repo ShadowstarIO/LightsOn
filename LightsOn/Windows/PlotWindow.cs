@@ -24,14 +24,12 @@ public sealed class PlotWindow : Window
 
     public override void Draw()
     {
-        ImGui.TextColored(UiTheme.Teal, plugin.Session.HereLine);
-        if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Where you are. Star is people in range, not a zone census.");
+        UiTheme.DrawHere(plugin.Session.HereLine, false);
 
         var venue = plugin.Session.Hop ?? NearbyScan.ListedHere(plugin.Venues);
         if (venue is null)
         {
-            ImGui.TextDisabled("Not on a listed plot.");
+            ImGui.TextDisabled("Not on a listed plot or apartment.");
             if (ImGui.SmallButton("Full"))
                 plugin.ToggleMainUi();
             return;

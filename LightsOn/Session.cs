@@ -28,9 +28,14 @@ public sealed class Session
     public HashSet<string> HeardNames { get; } = new(StringComparer.OrdinalIgnoreCase);
     public bool SelfSpoke { get; set; }
     public bool HeardMusic { get; set; }
+    public bool HeardEmote { get; set; }
     public string HereLine { get; set; } = "Not logged in.";
     public Dictionary<string, string> ActionByVenue { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, DateTimeOffset> Sent { get; } = new(StringComparer.Ordinal);
+    public int SendSeconds { get; set; } = Limits.SendRateSeconds;
+    public int ScanSeconds { get; set; } = Limits.ScanCooldownSeconds;
+    public int ObserveSeconds { get; set; } = Limits.ObserveSeconds;
+    public int TourCount { get; set; }
 
     public string WatchPocket { get; set; } = "";
     public DateTimeOffset WatchSince { get; set; }
@@ -41,6 +46,7 @@ public sealed class Session
     public string OutdoorLine { get; set; } = "";
 
     public bool Watching => WatchPocket.Length > 0;
+    public bool Touring => TourCount >= Limits.TourVenues;
     public TimeSpan OnPlot => PlotKey.Length == 0 ? TimeSpan.Zero : DateTimeOffset.UtcNow - PlotSince;
     public TimeSpan InPocket => PocketKey.Length == 0 ? TimeSpan.Zero : DateTimeOffset.UtcNow - PocketSince;
 
@@ -57,7 +63,7 @@ public sealed class Session
     {
         if (!Sent.TryGetValue($"{venueId}:{action}", out var at))
             return TimeSpan.Zero;
-        var left = TimeSpan.FromSeconds(Limits.SendRateSeconds) - (DateTimeOffset.UtcNow - at);
+        var left = TimeSpan.FromSeconds(SendSeconds) - (DateTimeOffset.UtcNow - at);
         return left > TimeSpan.Zero ? left : TimeSpan.Zero;
     }
 
@@ -84,7 +90,7 @@ public sealed class Session
         {
             if (LastScanAt == default)
                 return TimeSpan.Zero;
-            var left = TimeSpan.FromSeconds(Limits.ScanCooldownSeconds) - (DateTimeOffset.UtcNow - LastScanAt);
+            var left = TimeSpan.FromSeconds(ScanSeconds) - (DateTimeOffset.UtcNow - LastScanAt);
             return left > TimeSpan.Zero ? left : TimeSpan.Zero;
         }
     }
@@ -114,6 +120,7 @@ public sealed class Session
         HeardNames.Clear();
         SelfSpoke = false;
         HeardMusic = false;
+        HeardEmote = false;
         Hop = null;
         if (key.Length > 0)
             ClearWatch();
