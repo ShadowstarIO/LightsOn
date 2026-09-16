@@ -16,6 +16,10 @@ internal static class Copy
     public const string DoorLocked = "Locked";
     public const string LooksClosed = "Looks Closed";
     public const string DirectoryUrl = "https://ffxivvenues.com/";
+    public static string ListingUrl(string? venueId)
+        => string.IsNullOrWhiteSpace(venueId)
+            ? DirectoryUrl
+            : $"https://ffxivvenues.com/venue/{venueId}";
     public const string OutdoorsHint =
         "Short-range street pockets. Audit and stay in the area, or wait about 10 minutes. Busier scenes note sooner.";
 

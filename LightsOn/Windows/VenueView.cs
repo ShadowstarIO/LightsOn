@@ -22,12 +22,36 @@ internal static class VenueView
         var occ = venue.Occupancy ?? OccupancySnapshot.Unknown;
         var onPlot = NearbyScan.MatchesVenue(venue);
         var here = HousingReader.Read();
+        var apartment = loc?.IsApartment == true;
+        var inside = onPlot && (here.Inside || here.OnApartment);
 
         ImGui.AlignTextToFramePadding();
         ImGui.TextColored(UiTheme.Title, venue.Name ?? "");
+        ImGui.SameLine(0, 0);
+        ImGui.TextDisabled(" - ");
+        ImGui.SameLine(0, 0);
+        ImGui.Text(apartment ? "Apartment" : "Plot");
+        if (onPlot)
+        {
+            ImGui.SameLine(0, 0);
+            ImGui.TextDisabled(" - ");
+            ImGui.SameLine(0, 0);
+            ImGui.Text(inside ? "Inside" : "Outside");
+        }
         ImGui.SameLine();
         if (ImGui.SmallButton("Refresh"))
             _ = plugin.RefreshVenue(venue);
+        if (loc is not null)
+        {
+            ImGui.SameLine();
+            if (ImGui.SmallButton("Copy"))
+            {
+                Lifestream.Copy(loc);
+                plugin.Session.SetAction(venue.Id, "Address copied.");
+            }
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip("Copy a Lifestream address (no /li). Paste in chat for friends.");
+        }
         ImGui.SameLine();
         if (currentPlot)
         {
@@ -44,69 +68,62 @@ internal static class VenueView
                 ImGui.SetTooltip("Open the small Current Plot window.");
         }
 
+        ImGui.TextWrapped(loc?.AddressPanel ?? loc?.AddressLong ?? here.Long);
+
         var lean = Lean(occ);
         ImGui.TextColored(BadgeColor(occ), SummaryStatus(occ, venue.Log, lean));
-        ImGui.SameLine();
-        ImGui.TextDisabled(venue.HoursLine);
 
-        if (onPlot)
-            ImGui.TextWrapped($"{(here.OnApartment ? "On This Apartment" : "On This Plot")} · {(here.Inside || here.OnApartment ? "inside" : "yard")} · {loc?.AddressLong ?? here.Long}");
-        else
-            ImGui.TextWrapped(loc?.AddressLong ?? "");
+        DrawLinks(venue, loc, onPlot);
 
-        if (loc is not null)
-        {
-            if (ImGui.SmallButton("Copy"))
-            {
-                Lifestream.Copy(loc);
-                plugin.Session.SetAction(venue.Id, "Address copied.");
-            }
-            if (ImGui.IsItemHovered())
-                ImGui.SetTooltip("Copy a Lifestream address (no /li). Paste in chat for friends.");
-            if (!onPlot && Lifestream.Installed() && Reach.CanVisitWorld(loc.World))
-            {
-                ImGui.SameLine();
-                if (ImGui.SmallButton("Travel"))
-                {
-                    try { Lifestream.Go(loc); }
-                    catch (Exception ex) { Plugin.Log.Verbose(ex, "Lifestream"); }
-                }
-                if (ImGui.IsItemHovered())
-                    ImGui.SetTooltip($"Lifestream: {Lifestream.Share(loc)}");
-            }
-        }
+        ImGui.TextDisabled(FlagsLine(venue));
 
-        DrawLinks(venue);
-        var story = venue.DescriptionText;
-        if (story.Length > 0)
+        if (venue.Description is { Count: > 0 })
         {
             ImGui.Spacing();
-            ImGui.TextWrapped(story.Length > 600 ? story[..600] + "…" : story);
+            foreach (var para in venue.Description)
+            {
+                if (string.IsNullOrWhiteSpace(para))
+                    continue;
+                ImGui.TextWrapped(para.Trim());
+            }
         }
 
+        ImGui.TextDisabled(venue.HoursLine);
+
         ImGui.Spacing();
-        DrawCheck(plugin, venue, onPlot, here);
+        DrawCheck(plugin, venue, onPlot, here, inside);
 
         DrawReportLog(plugin, venue);
         DrawLogBook(plugin, venue, onPlot);
     }
 
-    private static void DrawLinks(VenueListing venue)
+    private static void DrawLinks(VenueListing venue, VenueLocation? loc, bool onPlot)
     {
-        ImGui.TextDisabled(FlagsLine(venue));
-        if (ImGui.SmallButton("Listing"))
-            OpenUrl(Copy.DirectoryUrl);
-        if (!string.IsNullOrWhiteSpace(venue.Website))
+        var items = new List<(string Label, Action Click, string Tip)>
         {
-            ImGui.SameLine();
-            if (ImGui.SmallButton("Website"))
-                OpenUrl(venue.Website);
-        }
+            ("Listing", () => OpenUrl(Copy.ListingUrl(venue.Id)), "Open this venue on FFXIV Venues."),
+        };
         if (!string.IsNullOrWhiteSpace(venue.Discord))
+            items.Add(("Discord", () => OpenUrl(venue.Discord!), "Open the Discord invite."));
+        if (!string.IsNullOrWhiteSpace(venue.Website)
+            && venue.Website.IndexOf("ffxivvenues.com", StringComparison.OrdinalIgnoreCase) < 0)
+            items.Add(("Website", () => OpenUrl(venue.Website!), "Open the venue website."));
+        if (!onPlot && loc is not null && Lifestream.Installed() && Reach.CanVisitWorld(loc.World))
+            items.Add(("Travel", () =>
+            {
+                try { Lifestream.Go(loc); }
+                catch (Exception ex) { Plugin.Log.Verbose(ex, "Lifestream"); }
+            }, $"Lifestream: {Lifestream.Share(loc)}"));
+        items.Sort((a, b) => string.Compare(a.Label, b.Label, StringComparison.OrdinalIgnoreCase));
+
+        for (var i = 0; i < items.Count; i++)
         {
-            ImGui.SameLine();
-            if (ImGui.SmallButton("Discord"))
-                OpenUrl(venue.Discord);
+            if (i > 0)
+                ImGui.SameLine();
+            if (ImGui.SmallButton(items[i].Label))
+                items[i].Click();
+            if (ImGui.IsItemHovered())
+                ImGui.SetTooltip(items[i].Tip);
         }
     }
 
@@ -116,7 +133,7 @@ internal static class VenueView
         catch (Exception ex) { Plugin.Log.Verbose(ex, "Open link"); }
     }
 
-    private static void DrawCheck(Plugin plugin, VenueListing venue, bool onPlot, HousingAddress here)
+    private static void DrawCheck(Plugin plugin, VenueListing venue, bool onPlot, HousingAddress here, bool inside)
     {
         if (!NearbyScan.OccupancyEligible(venue))
         {
@@ -149,10 +166,11 @@ internal static class VenueView
 
         ImGui.SameLine();
         var canSend = plugin.CanSend;
-        var inside = here.Inside || here.OnApartment;
-        DrawSend(plugin, venue, inside ? Copy.HappeningButton : Copy.YardBusy, "happening", canSend, inside);
+        DrawSend(plugin, venue, "Active", "happening", canSend, inside,
+            inside ? Copy.HappeningButton : Copy.YardBusy);
         ImGui.SameLine();
-        DrawSend(plugin, venue, inside ? Copy.WrappedButton : Copy.YardQuiet, "wrapped_up", canSend, inside);
+        DrawSend(plugin, venue, "Quiet", "wrapped_up", canSend, inside,
+            inside ? Copy.WrappedButton : Copy.YardQuiet);
         if (!inside && HousingReader.DoorIsLocked())
         {
             ImGui.SameLine();
@@ -166,10 +184,13 @@ internal static class VenueView
         }
 
         var action = plugin.Session.ActionFor(venue.Id);
-        if (action.Length > 0)
-            ImGui.TextWrapped(action);
-        else
-            ImGui.TextWrapped(plugin.LastScanLine);
+        var line = action.Length > 0 ? action : plugin.LastScanLine;
+        if (line.Length > 0)
+        {
+            ImGui.SameLine();
+            ImGui.AlignTextToFramePadding();
+            ImGui.TextWrapped(line);
+        }
 
         if (plugin.Session.ObserveSince != default)
         {
@@ -198,7 +219,7 @@ internal static class VenueView
         return !hosted;
     }
 
-    private static void DrawSend(Plugin plugin, VenueListing venue, string label, string kind, bool canSend, bool inside)
+    private static void DrawSend(Plugin plugin, VenueListing venue, string label, string kind, bool canSend, bool inside, string? tip = null)
     {
         var action = kind == "door_locked"
             ? "door"
@@ -216,8 +237,13 @@ internal static class VenueView
             _ = plugin.ReportUi(venue, kind);
         if (blocked)
             ImGui.EndDisabled();
-        if (kind == "unhosted" && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
-            ImGui.SetTooltip("Door locked, or people here without a hosted scene. Staff and plot owner cannot be read from the client. Press twice. Does not replace Quiet Halls when the room is actually empty.");
+        if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+        {
+            if (kind == "unhosted")
+                ImGui.SetTooltip("Door locked, or people here without a hosted scene. Staff and plot owner cannot be read from the client. Press twice. Does not replace Quiet Halls when the room is actually empty.");
+            else if (!string.IsNullOrWhiteSpace(tip))
+                ImGui.SetTooltip(tip);
+        }
     }
 
     private static void DrawReportLog(Plugin plugin, VenueListing venue)

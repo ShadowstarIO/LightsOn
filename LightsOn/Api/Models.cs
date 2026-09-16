@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json.Serialization;
 
 namespace LightsOn.Api;
@@ -59,19 +60,62 @@ public sealed class VenueListing
     {
         get
         {
-            var r = Resolution;
-            if (r is null)
+            var upcoming = UpcomingHours().Take(3).ToList();
+            if (upcoming.Count == 0)
                 return "Hours not listed";
-            if (r.IsNow)
+            if (upcoming[0].IsNow)
             {
-                if (r.End is DateTimeOffset end)
-                    return $"Open now · until {end.ToLocalTime():h:mm tt}";
-                return "Open now";
+                var until = upcoming[0].End is DateTimeOffset end
+                    ? $" until {end.ToLocalTime():h:mm tt}"
+                    : "";
+                var later = upcoming.Skip(1).Select(FormatSlot).Where(s => s.Length > 0).ToList();
+                return later.Count == 0
+                    ? $"Open now{until}"
+                    : $"Open now{until} · Next {string.Join(" · ", later)}";
             }
-            if (r.Start is DateTimeOffset start)
-                return $"Next {start.ToLocalTime():ddd h:mm tt}";
-            return "Not in posted hours";
+            return "Next " + string.Join(" · ", upcoming.Select(FormatSlot).Where(s => s.Length > 0));
         }
+    }
+
+    public IEnumerable<VenueResolution> UpcomingHours()
+    {
+        var rows = new List<VenueResolution>();
+        if (Resolution is not null)
+            rows.Add(Resolution);
+        foreach (var ov in ScheduleOverrides)
+        {
+            if (!ov.Open)
+                continue;
+            rows.Add(new VenueResolution
+            {
+                IsNow = ov.IsNow,
+                IsWithinWeek = true,
+                Start = ov.Start,
+                End = ov.End,
+            });
+        }
+        foreach (var slot in Schedule)
+        {
+            if (slot.Resolution is not null)
+                rows.Add(slot.Resolution);
+        }
+
+        var now = DateTimeOffset.UtcNow.AddMinutes(-1);
+        return rows
+            .Where(r => r.IsNow || (r.End ?? r.Start) > now)
+            .GroupBy(r => r.Start?.ToUnixTimeSeconds() ?? 0)
+            .Select(g => g.First())
+            .OrderByDescending(r => r.IsNow)
+            .ThenBy(r => r.Start ?? DateTimeOffset.MaxValue);
+    }
+
+    private static string FormatSlot(VenueResolution r)
+    {
+        if (r.Start is DateTimeOffset start && r.End is DateTimeOffset end)
+            return $"{start.ToLocalTime():ddd h:mm tt}–{end.ToLocalTime():h:mm tt}";
+        if (r.Start is DateTimeOffset only)
+            return only.ToLocalTime().ToString("ddd h:mm tt");
+        return "";
     }
 }
 
@@ -109,6 +153,37 @@ public sealed class VenueLocation
 
     public string AddressLong => Head + Place.Format(District, Ward, HousePlot, IsApartment ? RoomNo : 0,
         IsApartment && Subdivision, null, compact: false);
+
+    public string AddressPanel
+    {
+        get
+        {
+            var bits = new List<string>();
+            if (!string.IsNullOrWhiteSpace(DataCenter))
+                bits.Add(DataCenter.Trim());
+            if (!string.IsNullOrWhiteSpace(World))
+                bits.Add(World.Trim());
+            if (!string.IsNullOrWhiteSpace(District))
+                bits.Add(District.Trim());
+            if (Ward is >= 1 and <= 30)
+                bits.Add($"Ward {Ward}");
+            if (Subdivision)
+                bits.Add("Sub");
+            if (IsApartment)
+            {
+                bits.Add($"Apt {RoomNo}");
+                if (Room > 0 && Room != RoomNo)
+                    bits.Add($"Room {Room}");
+            }
+            else
+            {
+                var plot = Plot is >= 31 and <= 60 ? Plot - 30 : Plot;
+                if (plot is >= 1 and <= 60)
+                    bits.Add($"Plot {plot}");
+            }
+            return string.Join(" - ", bits);
+        }
+    }
 
     private string Head
     {
