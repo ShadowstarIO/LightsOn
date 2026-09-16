@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
-    <Version>0.0.4.7</Version>
+    <Version>0.0.4.8</Version>
     <Author>XozaShadow</Author>
     <Name>LightsOn</Name>
     <Punchline>Tired of posted hours and an empty room? See where the lanterns are lit.</Punchline>

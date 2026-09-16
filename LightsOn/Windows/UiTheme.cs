@@ -43,9 +43,11 @@ internal static class UiTheme
 
     public static Vector4 TierColor(string? tier) => NearbyScan.TierRank(tier) switch
     {
-        3 => Happening,
-        2 => Amber,
-        1 => Yellow,
+        5 => Happening,
+        4 => Teal,
+        3 => Amber,
+        2 => Yellow,
+        1 => Orange,
         _ => Mute,
     };
 

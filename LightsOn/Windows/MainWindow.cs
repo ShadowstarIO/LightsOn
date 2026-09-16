@@ -23,7 +23,8 @@ public sealed class MainWindow : Window
     private string? selectedId;
     private string? selectedZone;
     private static readonly string[] StatusFilters = ["All", "Lanterns Lit", "Open Now", "Vacant", "No Data"];
-    private static readonly string[] OutdoorFilters = ["All", "Extremely Busy", "Some Activity", "Some Wandering"];
+    private static readonly string[] OutdoorFilters =
+        ["All", "Extremely Busy", "Busy", "Some Activity", "Light Activity", "Some Wandering"];
 
     public MainWindow(Plugin plugin)
         : base($"LightsOn {Plugin.Version}###LightsOnMain")
@@ -473,9 +474,13 @@ public sealed class MainWindow : Window
             return false;
         if (outdoorFilter == 1 && row.Tier != "extremely_busy")
             return false;
-        if (outdoorFilter == 2 && row.Tier != "some_activity")
+        if (outdoorFilter == 2 && row.Tier != "busy")
             return false;
-        if (outdoorFilter == 3 && row.Tier != "some_wandering")
+        if (outdoorFilter == 3 && row.Tier != "some_activity")
+            return false;
+        if (outdoorFilter == 4 && row.Tier != "light_activity")
+            return false;
+        if (outdoorFilter == 5 && row.Tier != "some_wandering")
             return false;
         if (string.IsNullOrEmpty(query))
             return true;

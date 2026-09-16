@@ -31,7 +31,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
 
-    public const string Version = "0.0.4.7";
+    public const string Version = "0.0.4.8";
     private const string CommandName = "/lightson";
     private const string CommandAlias = "/lon";
 
@@ -63,7 +63,7 @@ public sealed class Plugin : IDalamudPlugin
         Configuration.Save();
 
         http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.4.7 (+https://github.com/XozaShadow/LightsOn)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.4.8 (+https://github.com/XozaShadow/LightsOn)");
         directory = new DirectoryClient(http);
         occupancy = new OccupancyClient(http);
 
@@ -607,7 +607,7 @@ public sealed class Plugin : IDalamudPlugin
         Session.WatchOrigin = scan.Origin;
         Session.WatchMapX = scan.MapX;
         Session.WatchMapY = scan.MapY;
-        Session.WatchBusyHits = NearbyScan.TierRank(scan.Tier) >= 3 ? 1 : 0;
+        Session.WatchBusyHits = NearbyScan.TierRank(scan.Tier) >= 5 ? 1 : 0;
         Session.WatchReady = false;
         Session.LastAuditAt = DateTimeOffset.UtcNow;
         Session.LastAuditPocket = scan.Pocket;
@@ -894,16 +894,15 @@ public sealed class Plugin : IDalamudPlugin
         if (NearbyScan.TierRank(scan.Tier) > NearbyScan.TierRank(Session.WatchPeak.Tier)
             || (scan.Patrons > Session.WatchPeak.Patrons && NearbyScan.TierRank(scan.Tier) >= NearbyScan.TierRank(Session.WatchPeak.Tier)))
             Session.WatchPeak = scan;
-        if (NearbyScan.TierRank(scan.Tier) >= 3)
+        if (NearbyScan.TierRank(scan.Tier) >= 5)
             Session.WatchBusyHits++;
         else
             Session.WatchBusyHits = 0;
 
         var elapsed = (DateTimeOffset.UtcNow - Session.WatchSince).TotalSeconds;
-        var need = Limits.OutdoorWatchSeconds;
-        if (Session.WatchBusyHits >= 3 && elapsed >= Limits.OutdoorWatchBusySeconds)
-            need = Limits.OutdoorWatchBusySeconds;
-        else if (NearbyScan.TierRank(Session.WatchPeak.Tier) >= 2)
+        var rank = NearbyScan.TierRank(Session.WatchPeak.Tier);
+        var need = NearbyScan.WatchSeconds(Session.WatchPeak.Tier);
+        if (rank >= 5 && Session.WatchBusyHits < 3)
             need = Limits.OutdoorWatchSomeSeconds;
 
         if (elapsed < need)
