@@ -17,6 +17,7 @@ public sealed class VenueListing
     public List<string> Tags { get; set; } = [];
     public VenueResolution? Resolution { get; set; }
     public List<VenueSchedule> Schedule { get; set; } = [];
+    public List<VenueOverride> ScheduleOverrides { get; set; } = [];
 
     [JsonIgnore] public OccupancySnapshot Occupancy { get; set; } = OccupancySnapshot.Unknown;
     [JsonIgnore] public IReadOnlyList<GuestNote> Notes { get; set; } = [];
@@ -34,6 +35,20 @@ public sealed class VenueListing
 
     public void BindHours()
     {
+        if (Resolution?.IsNow == true)
+            return;
+        var ov = ScheduleOverrides.Find(o => o.Open && o.IsNow);
+        if (ov is not null)
+        {
+            Resolution = new VenueResolution
+            {
+                IsNow = true,
+                IsWithinWeek = true,
+                Start = ov.Start,
+                End = ov.End,
+            };
+            return;
+        }
         var open = Schedule.Find(s => s.Resolution?.IsNow == true)
                    ?? Schedule.Find(s => s.Resolution?.IsWithinWeek == true);
         if (open?.Resolution is not null)
@@ -63,6 +78,14 @@ public sealed class VenueListing
 public sealed class VenueSchedule
 {
     public VenueResolution? Resolution { get; set; }
+}
+
+public sealed class VenueOverride
+{
+    public bool Open { get; set; }
+    public bool IsNow { get; set; }
+    public DateTimeOffset? Start { get; set; }
+    public DateTimeOffset? End { get; set; }
 }
 
 public sealed class VenueLocation

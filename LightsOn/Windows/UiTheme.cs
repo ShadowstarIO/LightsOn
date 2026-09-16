@@ -1,6 +1,7 @@
 using System;
 using System.Numerics;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Game.Text;
 
 namespace LightsOn.Windows;
 
@@ -32,11 +33,11 @@ internal static class UiTheme
     {
         if (sameLine)
             ImGui.SameLine(0, 12);
-        ImGui.TextDisabled("Current Location:");
-        ImGui.SameLine(0, 6);
+        ImGui.TextDisabled(SeIconChar.LinkMarker.ToIconString());
+        ImGui.SameLine(0, 4);
         ImGui.TextColored(Teal, line);
         if (ImGui.IsItemHovered())
-            ImGui.SetTooltip("Where you are. Star is people in range, not a zone census.");
+            ImGui.SetTooltip("Where you are. Cross-world mark is people in range, not a zone census.");
     }
 
     public static Vector4 AgeColor(DateTimeOffset? at)

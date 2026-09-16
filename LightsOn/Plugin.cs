@@ -30,7 +30,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
 
-    public const string Version = "0.0.4.3";
+    public const string Version = "0.0.4.4";
     private const string CommandName = "/lightson";
     private const string CommandAlias = "/lon";
 
@@ -62,7 +62,7 @@ public sealed class Plugin : IDalamudPlugin
         Configuration.Save();
 
         http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.4.3 (+https://github.com/XozaShadow/LightsOn)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.4.4 (+https://github.com/XozaShadow/LightsOn)");
         directory = new DirectoryClient(http);
         occupancy = new OccupancyClient(http);
 
@@ -145,6 +145,8 @@ public sealed class Plugin : IDalamudPlugin
 
     public async Task ReportUi(VenueListing venue, string kind)
     {
+        if (Session.Sending)
+            return;
         ActionLine = "Sending…";
         var line = await TryReport(venue, kind).ConfigureAwait(true);
         ActionLine = line;
@@ -157,11 +159,12 @@ public sealed class Plugin : IDalamudPlugin
         Session.SetAction(venue.Id, ActionLine);
     }
 
-    public ScanResult ScanNow()
+    public ScanResult ScanNow(bool markAudit = true)
     {
         var result = NearbyScan.Run(this);
         LastScanLine = result.Summary;
-        Session.LastScanAt = DateTimeOffset.UtcNow;
+        if (markAudit)
+            Session.LastScanAt = DateTimeOffset.UtcNow;
         if (result.OnPlot)
             Session.Check.Absorb(result);
         return result;
@@ -307,6 +310,21 @@ public sealed class Plugin : IDalamudPlugin
 
     public async Task<string> TryReport(VenueListing venue, string kind, bool fromAuto = false)
     {
+        if (Session.Sending)
+            return Session.ActionFor(venue.Id) is { Length: > 0 } busy ? busy : "Sending…";
+        Session.Sending = true;
+        try
+        {
+            return await TryReportCore(venue, kind, fromAuto).ConfigureAwait(true);
+        }
+        finally
+        {
+            Session.Sending = false;
+        }
+    }
+
+    private async Task<string> TryReportCore(VenueListing venue, string kind, bool fromAuto)
+    {
         if (SendBlock() is { } blocked)
             return blocked;
         if (!ClientState.IsLoggedIn || ObjectTable.LocalPlayer is null)
@@ -316,9 +334,9 @@ public sealed class Plugin : IDalamudPlugin
         if (!NearbyScan.MatchesVenue(venue))
             return "Go to that listing first. Reports are location-checked.";
         if (venue.Resolution?.IsNow != true)
-            return "Only posted hours are reported. Nothing sent.";
+            return "Directory does not show this listing as open right now. Nothing sent.";
 
-        var scan = ScanNow();
+        var scan = ScanNow(false);
         if (!scan.OnPlot)
             return scan.Summary;
 
@@ -593,19 +611,20 @@ public sealed class Plugin : IDalamudPlugin
         if (msg.Contains("already reported", StringComparison.OrdinalIgnoreCase)
             || msg.Contains("already sent", StringComparison.OrdinalIgnoreCase))
             return "This already went out. Wait a bit before sending again.";
+        if (msg.Contains("too many", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("busy", StringComparison.OrdinalIgnoreCase))
+            return "Server is catching up. Wait a few seconds.";
         if (msg.Contains("proof does not match", StringComparison.OrdinalIgnoreCase))
             return "Audit does not match the listed place. Nothing sent.";
         if (msg.Contains("thresholdMet", StringComparison.OrdinalIgnoreCase))
             return "Not enough company after the audit. Nothing sent.";
         if (msg.Contains("posted hours", StringComparison.OrdinalIgnoreCase)
             || msg.Contains("not open", StringComparison.OrdinalIgnoreCase))
-            return "Only posted hours are reported. Nothing sent.";
+            return "Directory does not show this listing as open right now. Nothing sent.";
         if (msg.Contains("unknown venue", StringComparison.OrdinalIgnoreCase))
             return "Listing is not on the occupancy server yet. Hit Refresh.";
         if (msg.Contains("unauthorized", StringComparison.OrdinalIgnoreCase))
             return "This build cannot write occupancy. Need a CI ingest key.";
-        if (msg.Contains("busy", StringComparison.OrdinalIgnoreCase))
-            return "Server is busy. Try again in a minute.";
         return string.IsNullOrWhiteSpace(msg) || msg.Length > 160
             ? "Report did not reach the server."
             : $"Report did not reach the server ({msg}).";
@@ -698,6 +717,8 @@ public sealed class Plugin : IDalamudPlugin
         var venue = Session.Hop;
         if (venue is null)
             return;
+        if (Session.Sending)
+            return;
         if (!NearbyScan.OccupancyEligible(venue))
             return;
         if (SendBlock() is not null)
@@ -726,8 +747,6 @@ public sealed class Plugin : IDalamudPlugin
         if (venue.Id == Session.LastAutoVenue && scan.Inside == Session.LastAutoInside
             && DateTimeOffset.UtcNow - Session.LastAutoHappening < gap)
             return;
-        if (scan.Summary == Session.LastAutoChips && venue.Id == Session.LastAutoVenue)
-            return;
 
         _ = AutoHappening(venue, scan.Inside, scan.Summary);
     }
@@ -737,14 +756,12 @@ public sealed class Plugin : IDalamudPlugin
         var line = await TryReport(venue, "happening", true).ConfigureAwait(true);
         ActionLine = line;
         Session.SetAction(venue.Id, line);
+        Session.LastAutoVenue = venue.Id;
+        Session.LastAutoInside = inside;
+        Session.LastAutoHappening = DateTimeOffset.UtcNow;
+        Session.LastAutoChips = chips;
         if (line.StartsWith("Reported", StringComparison.Ordinal))
-        {
-            Session.LastAutoVenue = venue.Id;
-            Session.LastAutoInside = inside;
-            Session.LastAutoHappening = DateTimeOffset.UtcNow;
-            Session.LastAutoChips = chips;
             Notify($"{venue.Name}: lanterns are lit.");
-        }
     }
 
     private void TickOutdoor()

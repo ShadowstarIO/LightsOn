@@ -32,6 +32,7 @@ public sealed class Session
     public string HereLine { get; set; } = "Not logged in.";
     public Dictionary<string, string> ActionByVenue { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, DateTimeOffset> Sent { get; } = new(StringComparer.Ordinal);
+    public bool Sending { get; set; }
     public int SendSeconds { get; set; } = Limits.SendRateSeconds;
     public int ScanSeconds { get; set; } = Limits.ScanCooldownSeconds;
     public int ObserveSeconds { get; set; } = Limits.ObserveSeconds;

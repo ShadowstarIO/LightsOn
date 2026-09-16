@@ -43,9 +43,11 @@ internal static class Place
         else if (subdivision && ward is >= 1 and <= 30)
             bits.Add(compact ? "Sub" : "Subdivision");
         if (inside is true)
-            bits.Add("inside");
-        else if (inside is false && plot is >= 1 and <= 60)
-            bits.Add("yard");
+            bits.Add(compact ? "In" : "inside");
+        else if (inside is false && (plot is >= 1 and <= 60 || apartment is >= 1 and <= 99))
+            bits.Add(compact ? "Out" : "yard");
+        else if (inside is false && compact && ward is >= 1 and <= 30)
+            bits.Add("Out");
         return string.Join(" ", bits);
     }
 }

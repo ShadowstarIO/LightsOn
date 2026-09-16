@@ -18,12 +18,12 @@ internal static class Here
         var dc = DataCenter();
         var world = NearbyScan.CurrentWorldName();
         var head = Join(dc, world);
-        var people = $" {SeIconChar.BoxedStar.ToIconString()}{PeopleInRange()}";
+        var people = $" {SeIconChar.CrossWorld.ToIconString()}{PeopleInRange()}";
 
         var housing = HousingReader.Read();
         if (housing.Ward is >= 1 and <= 30)
         {
-            var place = housing.Long;
+            var place = housing.Summary;
             var (mx, my) = MapCoords();
             if (!housing.OnProperty && mx > 0 && my > 0)
                 place += $" ({mx:0.0}, {my:0.0})";
@@ -147,6 +147,6 @@ internal static class Here
             return b ?? "";
         if (string.IsNullOrWhiteSpace(b))
             return a;
-        return $"{a} · {b}";
+        return $"{a} {b}";
     }
 }
