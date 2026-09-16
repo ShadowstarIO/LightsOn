@@ -36,4 +36,4 @@ A report’s occupancy weight is **1 / hours old** (full for the first hour, a t
 
 ## Log Book
 
-A pair from two lists. Only while lanterns are lit, after ~8 minutes on the property (yard and halls count as one stay). Fades in 7 days.
+A pair from two lists (*Kind Crowd*, *Warm Food*). Only while lanterns are lit, after ~8 minutes on the property (yard and halls count as one stay). One note an hour. Flavor only, not an occupancy point. Fades in 7 days.

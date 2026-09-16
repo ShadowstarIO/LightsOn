@@ -32,6 +32,7 @@ public sealed class Session
     public string HereLine { get; set; } = "Not logged in.";
     public Dictionary<string, string> ActionByVenue { get; } = new(StringComparer.Ordinal);
     public Dictionary<string, DateTimeOffset> Sent { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, DateTimeOffset> Noted { get; } = new(StringComparer.Ordinal);
     public bool Sending { get; set; }
     public int SendSeconds { get; set; } = Limits.SendRateSeconds;
     public int ScanSeconds { get; set; } = Limits.ScanCooldownSeconds;
@@ -70,6 +71,16 @@ public sealed class Session
 
     public void MarkSent(string venueId, string action) =>
         Sent[$"{venueId}:{action}"] = DateTimeOffset.UtcNow;
+
+    public TimeSpan NoteWait(string venueId)
+    {
+        if (!Noted.TryGetValue(venueId, out var at))
+            return TimeSpan.Zero;
+        var left = TimeSpan.FromMinutes(Limits.LogBookNoteMinutes) - (DateTimeOffset.UtcNow - at);
+        return left > TimeSpan.Zero ? left : TimeSpan.Zero;
+    }
+
+    public void MarkNoted(string venueId) => Noted[venueId] = DateTimeOffset.UtcNow;
 
     public TimeSpan OutdoorWait(string pocket, string newTier)
     {
