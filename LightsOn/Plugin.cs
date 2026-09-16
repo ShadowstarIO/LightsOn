@@ -31,7 +31,8 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
 
-    public const string Version = "0.0.4.10";
+    public const string Version = "0.0.4.11";
+    public const string OccupancyHost = "https://lightson.xoza.net";
     private const string CommandName = "/lightson";
     private const string CommandAlias = "/lon";
 
@@ -59,11 +60,14 @@ public sealed class Plugin : IDalamudPlugin
     {
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         Configuration.EnsureReporterId();
+        if (string.IsNullOrWhiteSpace(Configuration.OccupancyApiUrl)
+            || Configuration.OccupancyApiUrl.Contains("workers.dev", StringComparison.OrdinalIgnoreCase))
+            Configuration.OccupancyApiUrl = OccupancyHost;
         RefreshTourPace();
         Configuration.Save();
 
         http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.4.10 (+https://github.com/XozaShadow/LightsOn)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.0.4.11 (+https://github.com/XozaShadow/LightsOn)");
         directory = new DirectoryClient(http);
         occupancy = new OccupancyClient(http);
 

@@ -7,6 +7,10 @@ account_id = "db80b407c9444b69c5bc38bbe07efb38"
 [triggers]
 crons = ["*/5 * * * *"]
 
+[[routes]]
+pattern = "lightson.xoza.net"
+custom_domain = true
+
 [[d1_databases]]
 binding = "DB"
 database_name = "lightson"

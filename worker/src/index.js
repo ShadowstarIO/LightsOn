@@ -5,7 +5,7 @@ const NOTE_RATE_MS = 60 * 60 * 1000;
 const OUTDOOR_MS = 4 * 60 * 60 * 1000;
 const MAX_BODY = 8 * 1024;
 const VENUES_URL = "https://api.ffxivvenues.com/venue";
-const UA = "LightsOn/0.0.4.10 (+https://github.com/XozaShadow/LightsOn)";
+const UA = "LightsOn/0.0.4.11 (+https://github.com/XozaShadow/LightsOn)";
 const TIER_RANK = { extremely_busy: 5, busy: 4, some_activity: 3, light_activity: 2, some_wandering: 1 };
 const OUTDOOR_LOCK_MS = {
   extremely_busy: 5 * 60 * 1000,
@@ -42,7 +42,7 @@ export default {
       if (request.method === "GET" && url.pathname === "/v1/outdoors")
         return cachedGet(request, ctx, 60, () => getOutdoors(env));
       if (request.method === "GET" && url.pathname === "/v1/notes")
-        return json(await getNotes(env, url.searchParams.get("venueId") || ""));
+        return cachedGet(request, ctx, 60, () => getNotes(env, url.searchParams.get("venueId") || ""));
       if (request.method === "GET" && url.pathname === "/v1/reports")
         return cachedGet(request, ctx, 60, () => getReportLog(env, url.searchParams.get("venueId") || ""));
       if (request.method === "POST")
