@@ -1,40 +1,49 @@
 # LightsOn
 
-**Testing pre-release.** Occupancy for listed Final Fantasy XIV venues: lanterns lit when there is enough company, quiet when posted hours meet an empty yard or hall. It does not rank venues by size.
+Tired of walking in on posted hours and an empty room?
+
+LightsOn is a [Dalamud](https://github.com/goatcorp/Dalamud) plugin for Final Fantasy XIV. It shows occupancy for listed venues: **Lanterns Lit** when there is enough company, **Quiet Halls** when the yard or room looks empty. A second tab notes short outdoor scenes. Reports never include names or headcounts.
 
 Listings come from [FFXIV Venues](https://ffxivvenues.com/). Occupancy is LightsOn.
 
-`/lightson` or `/lon`
+Open with `/lightson` or `/lon`.
 
-## Install (testing)
+## Install
 
-Plugin installer → settings → experimental → custom repositories:
+In the plugin installer: **Settings → Experimental → Custom Plugin Repositories**, add:
 
 ```
 https://raw.githubusercontent.com/XozaShadow/LightsOn/main/repo.json
 ```
 
-Enable **Get plugin testing versions**, then install LightsOn.
+Turn on **Get plugin testing versions**, then install LightsOn.
 
-Every drop is testing-only until there is an explicit live release.
+## Using it
 
-## Reports
+- **Venues** is the directory. Filter by data center, world, and status. Select a listing for address, hours, occupancy, and the log book.
+- **Outdoors** is street pockets, not houses.
+- **Current Plot** is a small window for the property you are standing on.
+- Reports stay off until **Send Reports** is on in Settings.
 
-Off until **Send Reports** is on. Never uploaded: names, IDs, friend or Free Company lists, or a headcount.
+Travel and Copy use [Lifestream](https://github.com/NightmareXIV/Lifestream) when it is installed. Copy still works without it.
 
-A check can be sent from the yard or the room. They list separately. The room weighs more. Ward + Plot is the property. Apartments use Ward + Apt (Subdivision when it is one).
+## Occupancy
 
-Quiet is always a button. Lanterns may send themselves, then taper off as more people agree. After three different listed places in a night, sends wait 20 seconds instead of 45.
+A check is local until you send it. Yard and inside are separate; the room weighs more. Houses are ward and plot. Apartments are ward and apartment (and subdivision when the listing is in one). You have to be on that property.
 
-Public occupancy lasts while posted hours are on, **up to 4 hours**. Older reports fade (each hour divides their weight), so a fresh quiet can beat a stale busy. Log-book notes: **7 days**, cap 12, after about 8 minutes on the property.
+**Quiet** is always a button. **Active** (Lanterns Lit) may send itself after a short watch, then slows down as more people agree. After three different listed places in a night, waits drop so you can tour.
 
-## Log Book
+Occupancy lasts while the directory shows the listing as open, up to four hours. Older reports fade, so a fresh quiet can beat a stale busy.
 
-Two lists, not free-form. Example: *Kind Host*, *Warm Music*. One note per person per venue per hour. Flavor only — not an occupancy point.
+Friends and Free Company can be left out of the company check. Chat text is never uploaded.
+
+## Log book
+
+Two lists, not free-form. Pairs look like *Kind Crowd* or *Warm Food*. One note per person per venue per hour, after about eight minutes on the property, and only while lanterns are lit. Flavor only — not an occupancy point. Notes last about seven days.
 
 ## Outdoors
 
-A second tab for short-range street scenes. **Audit** and stay in the area (about a minute; busier scenes finish sooner), or wait about 10 minutes. Private gatherings can be kept off the list. The public list is about 20 minutes.
+Short-range street pockets (~20 yalms), not a whole zone. **Audit** and stay in the area for about a minute (busier scenes finish sooner), or wait about ten minutes with outdoor notes on. Private gatherings can be kept off the list. The public list is about twenty minutes.
 
 ## Commands
 
@@ -46,17 +55,19 @@ A second tab for short-range street scenes. **Audit** and stay in the area (abou
 | `/lon config` | Settings |
 | `/lon refresh` | Reload listings |
 
-## Other plugins
+## Privacy
 
-Occupancy **GET** is public so other plugins and sites can read the same snapshots. Writes stay with the shipping plugin. See [API](docs/API.md).
+Names, friend lists, Free Company tags, the numeric company score, and chat text stay on your machine. What leaves, if you opt in, is a listed venue id, lanterns or quiet, a random reporter id, and a coarse plot proof. Details: [Privacy](docs/PRIVACY.md).
 
 ## Docs
 
 - [Privacy](docs/PRIVACY.md)
-- [Activity wording](docs/ACTIVITY.md)
-- [API](docs/API.md)
+- [What the lantern reads](docs/ACTIVITY.md)
 - [Outdoors](docs/OPENWORLD.md)
+- [Occupancy API](docs/API.md) — public GET for other plugins and sites
 
-Source: https://github.com/XozaShadow/LightsOn
+## License
+
+[MIT](LICENSE)
 
 <a href="https://www.flaticon.com/free-icons/birthday-and-party" title="icons">Icons created by Magnific - Flaticon</a>
