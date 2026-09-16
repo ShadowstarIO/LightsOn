@@ -27,7 +27,7 @@ public sealed class Configuration : IPluginConfiguration
     public bool ListingsOnly { get; set; }
     public bool ShowOtherRegions { get; set; }
     public string ReporterId { get; set; } = "";
-    public string OccupancyApiUrl { get; set; } = "https://REDACTED";
+    public string OccupancyApiUrl { get; set; } = "https://lightson.xoza.net";
     public long ReportEnabledAtUnix { get; set; }
     public long ReporterResetAtUnix { get; set; }
     public string TourDay { get; set; } = "";
