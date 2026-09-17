@@ -16,7 +16,7 @@ In the plugin installer: **Settings → Experimental → Custom Plugin Repositor
 https://raw.githubusercontent.com/ShadowstarIO/XIV/main/repo.json
 ```
 
-Turn on **Get plugin testing versions**, then install LightsOn. The same catalog lists [StatusShift](https://github.com/ShadowstarIO/StatusShift).
+Save, then `/xlplugins` and install LightsOn. The same catalog lists [StatusShift](https://github.com/ShadowstarIO/StatusShift).
 
 ## Using it
 
