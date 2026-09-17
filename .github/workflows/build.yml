@@ -119,16 +119,23 @@ jobs:
           $unix = [int64]"${{ steps.ver.outputs.unix }}"
           $tag = "${{ steps.ver.outputs.tag }}"
           $link = "https://github.com/ShadowstarIO/LightsOn/releases/download/$tag/LightsOn.zip"
+          $prerelease = "${{ github.event.release.prerelease }}" -eq "true"
           foreach ($path in @("pluginmaster.json", "repo.json")) {
             $raw = Get-Content $path -Raw | ConvertFrom-Json
             $entry = if ($raw -is [System.Array]) { $raw[0] } else { $raw }
-            $entry.IsTestingExclusive = $true
             $entry.TestingAssemblyVersion = $v
             $entry.DownloadLinkTesting = $link
             if ($entry.PSObject.Properties.Name -notcontains "TestingDalamudApiLevel") {
               $entry | Add-Member -NotePropertyName TestingDalamudApiLevel -NotePropertyValue 15
             }
-            # Testing-only until a later, explicit live release.
+            if ($prerelease) {
+              $entry.IsTestingExclusive = $true
+            } else {
+              $entry.IsTestingExclusive = $false
+              $entry.AssemblyVersion = $v
+              $entry.DownloadLinkInstall = $link
+              $entry.DownloadLinkUpdate = $link
+            }
             if ($entry.PSObject.Properties.Name -contains "LastUpdate") {
               $entry.LastUpdate = $unix
             }
@@ -143,7 +150,8 @@ jobs:
           git add pluginmaster.json repo.json
           git diff --cached --quiet
           if ($LASTEXITCODE -ne 0) {
-            git commit -m "testing: $v manifests [skip ci]"
+            $kind = if ($prerelease) { "testing" } else { "release" }
+            git commit -m "${kind}: $v manifests [skip ci]"
             git push origin HEAD:main
           }
 
