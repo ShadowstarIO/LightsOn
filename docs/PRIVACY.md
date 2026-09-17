@@ -2,39 +2,30 @@
 
 LightsOn answers “is anyone at this listed venue?” and “is there a scene in this outdoor pocket?” without building a census.
 
-## On the client only
+## Stays on your machine
 
 - Names of nearby people
-- Friend list
-- Free Company tag comparison
+- Friend list and Free Company comparison
 - The numeric score used for “enough company”
-- Online-status labels (IC, Party Finder, melding)
-- Who is targeted / targeting you (glances)
-- That a tell, party line, say, or emote happened with someone already in the audit — never the text
-- That a nearby patron is looping an emote — never which emote
+- Who is targeted or targeting you
+- That chat or an emote happened — never the text, never which emote
 
-Those never leave the machine.
+## If Send Reports is on
 
-## Opt-in (HTTPS)
+HTTPS to LightsOn’s host only:
 
-Only with **Send Reports** on:
+- Listed venue id, lanterns or quiet, a random reporter id, coarse plot (world / district / ward / plot / inside)
+- Log-book pair from two lists
+- Outdoor: world, place, coarse pocket, busy tier, nearby/zone counts (cap 99, no names), optional scene word
 
-**Venue occupancy** — listed venue id; lanterns lit or wrapped up early; random reporter id; world / district / ward / plot / inside; `thresholdMet` (boolean). On-plot only.
-
-**Log Book** — same proof, plus a pair from two lists. Only while lanterns are lit, after ~8 minutes on the plot.
-
-**Outdoor scenes** — world, place, pocket id, tier, nearby and zone counts (cap 99, never names), optional scene word, in-character boolean, optional private-gathering vote.
-
-Listings are fetched from the public community venue directory ([FFXIV Venues](https://ffxivvenues.com/)). Occupancy is LightsOn’s host. Occupancy GET is public; writes are not.
+Listings come from [FFXIV Venues](https://ffxivvenues.com/). Occupancy GET is public. Writes are not.
 
 ## Never collected
 
 - Other people’s names, Content IDs, or account IDs
 - Your character name or Content ID
-- Exact coordinates (outdoor pockets are a coarse cell; the map flag is that cell, computed on your client)
+- Exact coordinates
 - Unlisted houses
 - Chat logs
 
-## Reporter ID
-
-Generated locally. Settings → Reset ID. Reports wait 20 minutes after a reset.
+Reporter id is generated locally. Settings → Reset ID.
