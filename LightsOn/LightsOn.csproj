@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
-    <Version>0.1.0.0</Version>
-    <Author>XozaShadow</Author>
+    <Version>0.1.0.1</Version>
+    <Author>Shadowstar</Author>
     <Name>LightsOn</Name>
     <Punchline>Tired of posted hours and an empty room? See where the lanterns are lit.</Punchline>
     <Description>Occupancy for listed venues and short outdoor scenes. Reports are lanterns lit or wrapped up early, never names or counts. Optional log-book notes while the lanterns are lit.</Description>
