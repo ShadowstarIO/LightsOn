@@ -28,4 +28,4 @@ Listings come from [FFXIV Venues](https://ffxivvenues.com/). Occupancy GET is pu
 - Unlisted houses
 - Chat logs
 
-Reporter id is generated locally. Settings → Reset ID.
+Reporter id is created on your machine. Settings → Reset ID.
