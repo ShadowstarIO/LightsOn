@@ -32,7 +32,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
 
-    public const string Version = "0.1.0.4";
+    public const string Version = "0.1.1.0";
     public const string OccupancyHost = "https://on.xiv.run";
     private const string CommandName = "/lightson";
     private const string CommandAlias = "/lon";
@@ -54,6 +54,7 @@ public sealed class Plugin : IDalamudPlugin
     public readonly Session Session = new();
     public IReadOnlyList<VenueListing> Venues { get; private set; } = [];
     public IReadOnlyList<OutdoorSnapshot> Outdoors { get; private set; } = [];
+    public IReadOnlyList<PartakePin> PartakePins { get; private set; } = [];
     public string StatusLine { get; private set; } = "Loading listings…";
     public string LastScanLine { get; private set; } = "No audit yet.";
     public string ActionLine { get; set; } = "";
@@ -77,7 +78,7 @@ public sealed class Plugin : IDalamudPlugin
         Configuration.Save();
 
         http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.1.0.4 (+https://github.com/ShadowstarIO/LightsOn)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.1.1.0 (+https://github.com/ShadowstarIO/LightsOn)");
         directory = new DirectoryClient(http);
         occupancy = new OccupancyClient(http);
 
@@ -220,7 +221,20 @@ public sealed class Plugin : IDalamudPlugin
         {
             if (force || Venues.Count == 0)
                 StatusLine = "Loading listings…";
-            var list = await directory.GetVenues(force, token).ConfigureAwait(true);
+            var list = (await directory.GetVenues(force, token).ConfigureAwait(true)).ToList();
+            PartakeFeed? partake = null;
+            if (Configuration.OccupancyEnabled)
+            {
+                try
+                {
+                    partake = await occupancy.GetPartake(Configuration.OccupancyApiUrl, token).ConfigureAwait(true);
+                }
+                catch (Exception ex)
+                {
+                    Log.Verbose(ex, "Partake fetch failed");
+                }
+            }
+            ApplyPartake(list, partake);
             if (Configuration.OccupancyEnabled)
             {
                 try
@@ -257,6 +271,7 @@ public sealed class Plugin : IDalamudPlugin
                         venue.Occupancy = OccupancySnapshot.Unknown;
                 }
                 Outdoors = [];
+                PartakePins = [];
             }
 
             var previous = Venues;
@@ -284,6 +299,68 @@ public sealed class Plugin : IDalamudPlugin
             Log.Warning(ex, "Listing fetch failed");
             StatusLine = "Could not load listings.";
         }
+    }
+
+    private void ApplyPartake(List<VenueListing> list, PartakeFeed? feed)
+    {
+        var houses = feed?.Houses ?? [];
+        var byPlace = new Dictionary<string, PartakeHouse>(StringComparer.Ordinal);
+        foreach (var house in houses)
+        {
+            if (!string.IsNullOrWhiteSpace(house.PlaceId))
+                byPlace[house.PlaceId] = house;
+        }
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var venue in list)
+        {
+            var id = PlaceId.From(venue.Location);
+            if (id.Length == 0)
+                continue;
+            seen.Add(id);
+            if (byPlace.TryGetValue(id, out var house) && !string.IsNullOrWhiteSpace(house.Url))
+                venue.PartakeUrl = house.Url;
+        }
+
+        foreach (var house in byPlace.Values)
+        {
+            if (seen.Contains(house.PlaceId) || string.IsNullOrWhiteSpace(house.World))
+                continue;
+            list.Add(PartakeVenue(house));
+        }
+
+        PartakePins = feed?.Pins ?? [];
+    }
+
+    private static VenueListing PartakeVenue(PartakeHouse house)
+    {
+        var venue = new VenueListing
+        {
+            Id = house.PlaceId,
+            Name = string.IsNullOrWhiteSpace(house.Name) ? "Partake" : house.Name,
+            PartakeUrl = house.Url,
+            Description = ["Listed on Partake."],
+            Location = new VenueLocation
+            {
+                World = house.World,
+                District = house.District,
+                Ward = house.Ward,
+                Plot = house.Apartment > 0 ? 0 : house.Subdivision ? house.Plot + 30 : house.Plot,
+                Subdivision = house.Subdivision,
+                Apartment = house.Apartment,
+            },
+        };
+        if (house.OpenNow || house.StartsAt is not null)
+        {
+            venue.Resolution = new VenueResolution
+            {
+                IsNow = house.OpenNow,
+                IsWithinWeek = true,
+                Start = house.StartsAt,
+                End = house.EndsAt,
+            };
+        }
+        return venue;
     }
 
     public async Task RefreshVenue(VenueListing venue)

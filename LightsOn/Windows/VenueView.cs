@@ -107,10 +107,16 @@ internal static class VenueView
 
     private static void DrawLinks(VenueListing venue)
     {
-        var items = new List<(string Label, Action Click, string Tip)>
+        var items = new List<(string Label, Action Click, string Tip)>();
+        var partake = !string.IsNullOrWhiteSpace(venue.PartakeUrl);
+        var onVenues = !PlaceId.IsPlace(venue.Id);
+        if (onVenues)
         {
-            ("Listing", () => OpenUrl(Copy.ListingUrl(venue.Id)), "Open this venue on FFXIV Venues."),
-        };
+            items.Add((partake ? "ListingV" : "Listing", () => OpenUrl(Copy.ListingUrl(venue.Id)),
+                "Open this venue on FFXIV Venues."));
+        }
+        if (partake)
+            items.Add(("ListingP", () => OpenUrl(venue.PartakeUrl!), "Open this place on Partake."));
         if (!string.IsNullOrWhiteSpace(venue.Discord))
             items.Add(("Discord", () => OpenUrl(venue.Discord!), "Open the Discord invite."));
         if (!string.IsNullOrWhiteSpace(venue.Website)

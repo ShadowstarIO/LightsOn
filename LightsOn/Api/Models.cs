@@ -21,6 +21,7 @@ public sealed class VenueListing
     public List<VenueOverride> ScheduleOverrides { get; set; } = [];
 
     [JsonIgnore] public OccupancySnapshot Occupancy { get; set; } = OccupancySnapshot.Unknown;
+    [JsonIgnore] public string? PartakeUrl { get; set; }
     [JsonIgnore] public IReadOnlyList<GuestNote> Notes { get; set; } = [];
     [JsonIgnore] public IReadOnlyList<OccupancyEvent> Log { get; set; } = [];
 
@@ -117,6 +118,41 @@ public sealed class VenueListing
             return only.ToLocalTime().ToString("ddd h:mm tt");
         return "";
     }
+}
+
+public sealed class PartakeFeed
+{
+    public List<PartakeHouse> Houses { get; set; } = [];
+    public List<PartakePin> Pins { get; set; } = [];
+}
+
+public sealed class PartakeHouse
+{
+    public string PlaceId { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string World { get; set; } = "";
+    public string District { get; set; } = "";
+    public int Ward { get; set; }
+    public int Plot { get; set; }
+    public bool Subdivision { get; set; }
+    public int Apartment { get; set; }
+    public string Url { get; set; } = "";
+    public bool OpenNow { get; set; }
+    public DateTimeOffset? StartsAt { get; set; }
+    public DateTimeOffset? EndsAt { get; set; }
+}
+
+public sealed class PartakePin
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string World { get; set; } = "";
+    public string Zone { get; set; } = "";
+    public float X { get; set; }
+    public float Y { get; set; }
+    public string Url { get; set; } = "";
+    public DateTimeOffset? StartsAt { get; set; }
+    public DateTimeOffset? EndsAt { get; set; }
 }
 
 public sealed class VenueSchedule

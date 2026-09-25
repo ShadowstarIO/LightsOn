@@ -120,6 +120,26 @@ internal static class Here
         }
     }
 
+    public static bool FlagMap(uint territoryId, float mapX, float mapY)
+    {
+        try
+        {
+            var row = Plugin.DataManager.GetExcelSheet<TerritoryType>().GetRowOrDefault(territoryId);
+            if (row is not TerritoryType t)
+                return false;
+            var map = t.Map.ValueNullable;
+            if (map is null)
+                return false;
+            return Flag(territoryId, FromMap(mapX, map.Value.OffsetX, map.Value.SizeFactor),
+                FromMap(mapY, map.Value.OffsetY, map.Value.SizeFactor));
+        }
+        catch (Exception ex)
+        {
+            Plugin.Log.Verbose(ex, "Map flag failed");
+            return false;
+        }
+    }
+
     public static string DataCenter()
     {
         try
@@ -139,6 +159,15 @@ internal static class Here
     {
         var scaled = (world + offset) * (sizeFactor / 100f);
         return 41f * (scaled + 1024f) / 2048f + 1f;
+    }
+
+    private static float FromMap(float map, int offset, int sizeFactor)
+    {
+        var factor = sizeFactor / 100f;
+        if (factor == 0)
+            return 0;
+        var scaled = (map - 1f) * 2048f / 41f - 1024f;
+        return scaled / factor - offset;
     }
 
     private static string Join(string a, string b)

@@ -68,6 +68,13 @@ internal sealed class OccupancyClient
         await EnsureOk(res).ConfigureAwait(false);
     }
 
+    public async Task<PartakeFeed> GetPartake(string baseUrl, CancellationToken token)
+    {
+        var url = baseUrl.Trim().TrimEnd('/') + "/v1/partake";
+        return await http.GetFromJsonAsync<PartakeFeed>(url, Json, token).ConfigureAwait(false)
+               ?? new PartakeFeed();
+    }
+
     public async Task<List<OutdoorSnapshot>> GetOutdoors(string baseUrl, CancellationToken token)
     {
         var url = baseUrl.Trim().TrimEnd('/') + "/v1/outdoors";

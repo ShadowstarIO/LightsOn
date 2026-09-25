@@ -205,8 +205,10 @@ public sealed class MainWindow : Window
         selectedZone ??= zones.FirstOrDefault()?.Key;
         var picked = zones.FirstOrDefault(z => z.Key == selectedZone);
 
+        var pins = PartakePinsForList();
+        var bottom = pins.Count > 0 ? 148f : 0f;
         var listW = Math.Max(240, ImGui.GetContentRegionAvail().X * 0.40f);
-        ImGui.BeginChild("oz-list", new Vector2(listW, -1), true);
+        ImGui.BeginChild("oz-list", new Vector2(listW, -bottom), true);
         if (zones.Count == 0)
             ImGui.TextDisabled($"No outdoor scenes reported in the last {Limits.OutdoorListHours} hours.");
         foreach (var zone in zones)
@@ -224,12 +226,14 @@ public sealed class MainWindow : Window
         ImGui.EndChild();
 
         ImGui.SameLine();
-        ImGui.BeginChild("oz-detail", new Vector2(0, -1), true);
+        ImGui.BeginChild("oz-detail", new Vector2(0, -bottom), true);
         if (picked is null)
             ImGui.TextDisabled("Pick a zone.");
         else
             DrawOutdoorDetail(picked);
         ImGui.EndChild();
+        if (pins.Count > 0)
+            DrawPartakePins(pins);
     }
 
     private void DrawOutdoorDetail(OutdoorZone picked)
@@ -240,6 +244,14 @@ public sealed class MainWindow : Window
         ImGui.TextColored(UiTheme.Title, OutdoorTitle(picked));
         if (kind.Length > 0)
             ImGui.TextDisabled(kind);
+        var pin = NearbyPartake(picked);
+        if (pin is not null)
+        {
+            ImGui.TextDisabled(pin.Name);
+            ImGui.SameLine();
+            if (ImGui.SmallButton("ListingP##oz"))
+                OpenPartake(pin.Url);
+        }
         ImGui.Separator();
         foreach (var row in picked.Reports)
             DrawOutdoorReport(row);
@@ -310,6 +322,117 @@ public sealed class MainWindow : Window
         if (row.Score > 0)
             bits.Add($"signals +{row.Score}");
         return string.Join(" · ", bits);
+    }
+
+    private List<PartakePin> PartakePinsForList()
+    {
+        var pins = new List<PartakePin>();
+        foreach (var pin in plugin.PartakePins)
+        {
+            if (string.IsNullOrWhiteSpace(pin.Zone))
+                continue;
+            if (Absorbed(pin))
+                continue;
+            pins.Add(pin);
+        }
+        return pins;
+    }
+
+    private bool Absorbed(PartakePin pin)
+    {
+        foreach (var row in plugin.Outdoors)
+        {
+            if (!SameZone(row, pin))
+                continue;
+            if (MapNear(row, pin))
+                return true;
+        }
+        return false;
+    }
+
+    private PartakePin? NearbyPartake(OutdoorZone zone)
+    {
+        foreach (var pin in plugin.PartakePins)
+        {
+            if (zone.Reports.Any(row => SameZone(row, pin) && MapNear(row, pin)))
+                return pin;
+        }
+        return null;
+    }
+
+    private static bool SameZone(OutdoorSnapshot row, PartakePin pin)
+    {
+        if (!string.Equals(row.World, pin.World, StringComparison.OrdinalIgnoreCase))
+            return false;
+        var place = string.IsNullOrWhiteSpace(row.Zone) ? row.Place : row.Zone;
+        return place.Contains(pin.Zone, StringComparison.OrdinalIgnoreCase)
+               || pin.Zone.Contains(place, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool MapNear(OutdoorSnapshot row, PartakePin pin)
+    {
+        var coords = NearbyScan.PocketCoords(row.Pocket);
+        if (!TryCoords(coords, out var x, out var y))
+            return false;
+        return Math.Max(Math.Abs(x - pin.X), Math.Abs(y - pin.Y)) <= 1f;
+    }
+
+    private bool ZoneBusy(PartakePin pin)
+    {
+        foreach (var row in plugin.Outdoors)
+        {
+            if (SameZone(row, pin) && row.ZoneCount >= 55)
+                return true;
+        }
+        return false;
+    }
+
+    private static bool TryCoords(string text, out float x, out float y)
+    {
+        x = 0;
+        y = 0;
+        var trimmed = (text ?? "").Trim().Trim('(', ')');
+        var parts = trimmed.Split(',');
+        if (parts.Length != 2)
+            return false;
+        return float.TryParse(parts[0], out x) && float.TryParse(parts[1], out y);
+    }
+
+    private void DrawPartakePins(List<PartakePin> pins)
+    {
+        ImGui.Separator();
+        ImGui.TextDisabled("Partake");
+        ImGui.BeginChild("oz-partake", new Vector2(0, 0), true);
+        foreach (var pin in pins)
+        {
+            ImGui.AlignTextToFramePadding();
+            ImGui.Text(pin.Name);
+            ImGui.SameLine();
+            ImGui.TextDisabled($"{pin.World} {pin.Zone} ({pin.X:0.0}, {pin.Y:0.0})");
+            ImGui.SameLine();
+            var territory = Zone.FindTerritory(pin.Zone);
+            if (territory == 0)
+                ImGui.BeginDisabled();
+            if (ImGui.SmallButton($"Flg##p{pin.Id}"))
+                Here.FlagMap(territory, pin.X, pin.Y);
+            if (territory == 0)
+                ImGui.EndDisabled();
+            ImGui.SameLine();
+            if (ImGui.SmallButton($"ListingP##p{pin.Id}"))
+                OpenPartake(pin.Url);
+            if (ZoneBusy(pin))
+            {
+                ImGui.SameLine();
+                ImGui.TextColored(UiTheme.TierColor("busy"), "Zone busy");
+            }
+        }
+        ImGui.EndChild();
+    }
+
+    private static void OpenPartake(string url)
+    {
+        try { Dalamud.Utility.Util.OpenLink(url); }
+        catch (Exception ex) { Plugin.Log.Verbose(ex, "Open link"); }
     }
 
     private void DrawOutdoorScanBar()

@@ -14,6 +14,7 @@ Writes are not a public API.
 | GET | `/v1/occupancy` | Full state per listing. Quiet is included only after two different networks report it and the score still comes out quiet. |
 | GET | `/v1/snapshot` | The same list, stored and refreshed about every five minutes. |
 | GET | `/v1/lit` | Venue ids that are lit. This list does not include quiet. |
+| GET | `/v1/partake` | Partake houses and outdoor points. Attendance is not a LightsOn report. |
 | GET | `/v1/reports?venueId=` | Recent reports for one listing |
 | GET | `/v1/outdoors` | Outdoor pockets |
 | GET | `/v1/notes?venueId=` | Log-book lines (phrases only) |

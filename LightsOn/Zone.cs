@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Lumina.Excel.Sheets;
 
 namespace LightsOn;
@@ -24,6 +25,37 @@ internal static class Zone
         {
             return ("", "", "");
         }
+    }
+
+    private static readonly Dictionary<string, uint> Territories = new(StringComparer.OrdinalIgnoreCase);
+
+    public static uint FindTerritory(string place)
+    {
+        var name = (place ?? "").Trim();
+        if (name.Length == 0)
+            return 0;
+        if (Territories.TryGetValue(name, out var cached))
+            return cached;
+        try
+        {
+            foreach (var row in Plugin.DataManager.GetExcelSheet<TerritoryType>())
+            {
+                var label = row.PlaceName.ValueNullable?.Name.ToString() ?? "";
+                if (!string.Equals(label, name, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                var use = UseOf(row);
+                if (use is not (0 or 1 or 13 or 21 or 23 or 41))
+                    continue;
+                Territories[name] = row.RowId;
+                return row.RowId;
+            }
+        }
+        catch
+        {
+            return 0;
+        }
+        Territories[name] = 0;
+        return 0;
     }
 
     public static string Line(string world, string region, string place)
