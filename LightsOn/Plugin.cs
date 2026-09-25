@@ -32,7 +32,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
 
     public const string Version = "0.1.0.2";
-    public const string OccupancyHost = "https://lightson.shadowstar.io";
+    public const string OccupancyHost = "https://on.xiv.run";
     private const string CommandName = "/lightson";
     private const string CommandAlias = "/lon";
 

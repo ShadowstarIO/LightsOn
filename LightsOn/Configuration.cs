@@ -27,7 +27,7 @@ public sealed class Configuration : IPluginConfiguration
     public bool ListingsOnly { get; set; }
     public bool ShowOtherRegions { get; set; }
     public string ReporterId { get; set; } = "";
-    public string OccupancyApiUrl { get; set; } = "https://lightson.shadowstar.io";
+    public string OccupancyApiUrl { get; set; } = "https://on.xiv.run";
     public long ReportEnabledAtUnix { get; set; }
     public long ReporterResetAtUnix { get; set; }
     public string TourDay { get; set; } = "";

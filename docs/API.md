@@ -2,7 +2,7 @@
 
 Other plugins and sites can **GET** the same occupancy LightsOn shows. No names, no reporter ids.
 
-Host: `https://lightson.shadowstar.io`
+Host: `https://on.xiv.run`
 
 Writes are not a public API.
 
