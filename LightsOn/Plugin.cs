@@ -12,6 +12,7 @@ using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Interface.Windowing;
 using Dalamud.IoC;
 using Dalamud.Plugin;
+using Dalamud.Plugin.Ipc;
 using Dalamud.Plugin.Services;
 using LightsOn.Api;
 using LightsOn.Scan;
@@ -31,7 +32,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
 
-    public const string Version = "0.1.0.2";
+    public const string Version = "0.1.0.4";
     public const string OccupancyHost = "https://on.xiv.run";
     private const string CommandName = "/lightson";
     private const string CommandAlias = "/lon";
@@ -46,6 +47,7 @@ public sealed class Plugin : IDalamudPlugin
     private DateTime lastTick = DateTime.MinValue;
     private DateTime lastHere = DateTime.MinValue;
     private DateTime lastPoll = DateTime.MinValue;
+    private ICallGateProvider<string, bool>? openVenue;
 
     public Configuration Configuration { get; }
     public readonly WindowSystem WindowSystem = new("LightsOn");
@@ -75,7 +77,7 @@ public sealed class Plugin : IDalamudPlugin
         Configuration.Save();
 
         http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.1.0.2 (+https://github.com/ShadowstarIO/LightsOn)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.1.0.4 (+https://github.com/ShadowstarIO/LightsOn)");
         directory = new DirectoryClient(http);
         occupancy = new OccupancyClient(http);
 
@@ -108,6 +110,7 @@ public sealed class Plugin : IDalamudPlugin
         Framework.Update += OnFramework;
         ClientState.TerritoryChanged += OnTerritory;
         Chat.ChatMessage += OnChat;
+        RegisterIpc();
 
         if (Configuration.OpenUiOnLoad)
             mainWindow.IsOpen = true;
@@ -127,6 +130,7 @@ public sealed class Plugin : IDalamudPlugin
         PluginInterface.UiBuilder.OpenConfigUi -= ToggleConfigUi;
         PluginInterface.UiBuilder.OpenMainUi -= ToggleMainUi;
         WindowSystem.RemoveAllWindows();
+        try { openVenue?.UnregisterFunc(); } catch { /* already gone */ }
         try { CommandManager.RemoveHandler(CommandName); } catch { /* already gone */ }
         try { CommandManager.RemoveHandler(CommandAlias); } catch { /* already gone */ }
     }
@@ -135,6 +139,29 @@ public sealed class Plugin : IDalamudPlugin
     public void ToggleMainUi() => mainWindow.Toggle();
     public void TogglePlotWindow() => plotWindow.IsOpen = !plotWindow.IsOpen;
     public void OpenPlotWindow() => plotWindow.IsOpen = true;
+
+    private void RegisterIpc()
+    {
+        try
+        {
+            openVenue = PluginInterface.GetIpcProvider<string, bool>("LightsOn.OpenVenue");
+            openVenue.RegisterFunc(OpenVenue);
+        }
+        catch (Exception ex)
+        {
+            Log.Warning(ex, "Could not register LightsOn.OpenVenue");
+        }
+    }
+
+    private bool OpenVenue(string venueId)
+    {
+        OpenPlotWindow();
+        if (string.IsNullOrWhiteSpace(venueId))
+            return true;
+        var here = Session.Hop ?? NearbyScan.ListedHere(Venues);
+        return here != null && string.Equals(here.Id, venueId, StringComparison.OrdinalIgnoreCase);
+    }
+
     public void SelectVenue(string id) => mainWindow.Select(id);
     public void ShowMini() => plotWindow.IsOpen = true;
     public void ShowFull(string id)
