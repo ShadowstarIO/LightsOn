@@ -2,7 +2,7 @@ name: Build LightsOn
 
 on:
   push:
-    branches: [main]
+    branches: [off, on]
   pull_request:
   workflow_dispatch:
   release:
@@ -146,7 +146,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             $kind = if ($prerelease) { "testing" } else { "release" }
             git commit -m "${kind}: $v manifests [skip ci]"
-            git push origin HEAD:main
+            $branch = "${{ github.event.release.target_commitish }}"
+            if (-not $branch -or $branch -like "refs/tags/*" -or $branch -like "v*") { $branch = "on" }
+            git push origin "HEAD:$branch"
           }
 
       - name: Attach LightsOn.zip to release
