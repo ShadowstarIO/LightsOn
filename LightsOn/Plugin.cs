@@ -588,10 +588,10 @@ public sealed class Plugin : IDalamudPlugin
         {
             if (ex.RetryAfterSeconds > 0)
                 Session.HoldVenue(venue.Id, ex.RetryAfterSeconds);
-            var wait = ex.RetryAfterSeconds > 0
+            var retry = ex.RetryAfterSeconds > 0
                 ? ex.RetryAfterSeconds
                 : (int)Math.Ceiling(Session.VenueHold(venue.Id).TotalSeconds);
-            var mins = Math.Max(1, (int)Math.Ceiling(wait / 60.0));
+            var mins = Math.Max(1, (int)Math.Ceiling(retry / 60.0));
             var line = $"Report cooldown due to plenty of audit support. Next report in {mins} minute{(mins == 1 ? "" : "s")}.";
             Session.SetAction(venue.Id, line);
             return line;
