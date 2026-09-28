@@ -69,12 +69,34 @@ public sealed class Session
 
     public void SetAction(string venueId, string line) => ActionByVenue[venueId] = line;
 
+    private readonly Dictionary<string, DateTimeOffset> VenueHoldUntil = new(StringComparer.Ordinal);
+
+    public void HoldVenue(string venueId, int seconds)
+    {
+        if (seconds <= 0 || string.IsNullOrWhiteSpace(venueId))
+            return;
+        VenueHoldUntil[venueId] = DateTimeOffset.UtcNow.AddSeconds(seconds);
+    }
+
+    public TimeSpan VenueHold(string venueId)
+    {
+        if (!VenueHoldUntil.TryGetValue(venueId, out var until))
+            return TimeSpan.Zero;
+        var left = until - DateTimeOffset.UtcNow;
+        return left > TimeSpan.Zero ? left : TimeSpan.Zero;
+    }
+
     public TimeSpan SendWait(string venueId, string action)
     {
-        if (!Sent.TryGetValue($"{venueId}:{action}", out var at))
-            return TimeSpan.Zero;
-        var left = TimeSpan.FromSeconds(SendSeconds) - (DateTimeOffset.UtcNow - at);
-        return left > TimeSpan.Zero ? left : TimeSpan.Zero;
+        var personal = TimeSpan.Zero;
+        if (Sent.TryGetValue($"{venueId}:{action}", out var at))
+        {
+            var left = TimeSpan.FromSeconds(SendSeconds) - (DateTimeOffset.UtcNow - at);
+            if (left > TimeSpan.Zero)
+                personal = left;
+        }
+        var hold = VenueHold(venueId);
+        return hold > personal ? hold : personal;
     }
 
     public void MarkSent(string venueId, string action) =>

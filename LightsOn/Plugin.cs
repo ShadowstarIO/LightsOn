@@ -32,7 +32,7 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
 
-    public const string Version = "0.1.1.0";
+    public const string Version = "0.1.2.0";
     public const string OccupancyHost = "https://on.xiv.run";
     private const string CommandName = "/lightson";
     private const string CommandAlias = "/lon";
@@ -78,7 +78,7 @@ public sealed class Plugin : IDalamudPlugin
         Configuration.Save();
 
         http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.1.1.0 (+https://github.com/ShadowstarIO/LightsOn)");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("LightsOn/0.1.2.0 (+https://github.com/ShadowstarIO/LightsOn)");
         directory = new DirectoryClient(http);
         occupancy = new OccupancyClient(http);
 
@@ -235,6 +235,7 @@ public sealed class Plugin : IDalamudPlugin
                 }
             }
             ApplyPartake(list, partake);
+            ApplyLive(list, await LoadLive(token).ConfigureAwait(true));
             if (Configuration.OccupancyEnabled)
             {
                 try
@@ -330,6 +331,43 @@ public sealed class Plugin : IDalamudPlugin
         }
 
         PartakePins = feed?.Pins ?? [];
+    }
+
+    private async Task<LiveFeed?> LoadLive(CancellationToken token)
+    {
+        if (!Configuration.OccupancyEnabled)
+            return null;
+        try
+        {
+            return await occupancy.GetLive(Configuration.OccupancyApiUrl, token).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            Log.Verbose(ex, "Live DJ fetch failed");
+            return null;
+        }
+    }
+
+    private static void ApplyLive(List<VenueListing> list, LiveFeed? feed)
+    {
+        var byPlace = new Dictionary<string, LiveDj>(StringComparer.Ordinal);
+        foreach (var dj in feed?.Djs ?? [])
+        {
+            if (!string.IsNullOrWhiteSpace(dj.PlaceId) && !string.IsNullOrWhiteSpace(dj.Url))
+                byPlace[dj.PlaceId] = dj;
+        }
+        foreach (var venue in list)
+        {
+            venue.LiveDjName = null;
+            venue.LiveDjUrl = null;
+            venue.LiveViewers = 0;
+            var id = PlaceId.From(venue.Location);
+            if (id.Length == 0 || !byPlace.TryGetValue(id, out var dj))
+                continue;
+            venue.LiveDjName = dj.Name;
+            venue.LiveDjUrl = dj.Url;
+            venue.LiveViewers = dj.Viewers;
+        }
     }
 
     private static VenueListing PartakeVenue(PartakeHouse house)
@@ -543,6 +581,18 @@ public sealed class Plugin : IDalamudPlugin
                 line += " Door locked.";
             if (unhosted)
                 line = "Reported: looks closed." + (report.Proof.DoorLocked ? " Door locked." : "");
+            Session.SetAction(venue.Id, line);
+            return line;
+        }
+        catch (OccupancyException ex) when (ex.Message.Contains("audit support", StringComparison.OrdinalIgnoreCase))
+        {
+            if (ex.RetryAfterSeconds > 0)
+                Session.HoldVenue(venue.Id, ex.RetryAfterSeconds);
+            var wait = ex.RetryAfterSeconds > 0
+                ? ex.RetryAfterSeconds
+                : (int)Math.Ceiling(Session.VenueHold(venue.Id).TotalSeconds);
+            var mins = Math.Max(1, (int)Math.Ceiling(wait / 60.0));
+            var line = $"Report cooldown due to plenty of audit support. Next report in {mins} minute{(mins == 1 ? "" : "s")}.";
             Session.SetAction(venue.Id, line);
             return line;
         }

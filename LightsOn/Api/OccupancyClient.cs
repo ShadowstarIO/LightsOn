@@ -68,6 +68,13 @@ internal sealed class OccupancyClient
         await EnsureOk(res).ConfigureAwait(false);
     }
 
+    public async Task<LiveFeed> GetLive(string baseUrl, CancellationToken token)
+    {
+        var url = baseUrl.Trim().TrimEnd('/') + "/v1/live";
+        return await http.GetFromJsonAsync<LiveFeed>(url, Json, token).ConfigureAwait(false)
+               ?? new LiveFeed();
+    }
+
     public async Task<PartakeFeed> GetPartake(string baseUrl, CancellationToken token)
     {
         var url = baseUrl.Trim().TrimEnd('/') + "/v1/partake";
@@ -105,17 +112,29 @@ internal sealed class OccupancyClient
             return;
         var raw = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
         var msg = "server error";
+        var retry = 0;
         try
         {
             using var doc = JsonDocument.Parse(raw);
             if (doc.RootElement.TryGetProperty("error", out var err))
                 msg = err.GetString() ?? msg;
+            if (doc.RootElement.TryGetProperty("retryAfter", out var wait) && wait.TryGetInt32(out var seconds))
+                retry = Math.Max(0, seconds);
         }
         catch
         {
             if (!string.IsNullOrWhiteSpace(raw) && raw.Length < 200)
                 msg = raw.Trim();
         }
-        throw new HttpRequestException(msg, null, res.StatusCode);
+        throw new OccupancyException(msg, res.StatusCode, retry);
     }
+}
+
+internal sealed class OccupancyException : HttpRequestException
+{
+    public int RetryAfterSeconds { get; }
+
+    public OccupancyException(string message, HttpStatusCode status, int retryAfterSeconds)
+        : base(message, null, status) =>
+        RetryAfterSeconds = retryAfterSeconds;
 }

@@ -150,6 +150,7 @@ internal static class VenueView
         }
 
         var scanWait = plugin.Session.ScanWait;
+        DrawLiveDj(venue);
         var auditBlocked = !onPlot || scanWait > TimeSpan.Zero;
         if (auditBlocked)
             ImGui.BeginDisabled();
@@ -230,6 +231,25 @@ internal static class VenueView
         return !hosted;
     }
 
+    private static void DrawLiveDj(VenueListing venue)
+    {
+        if (string.IsNullOrWhiteSpace(venue.LiveDjUrl))
+            return;
+        ImGui.PushStyleColor(ImGuiCol.Button, new Vector4(0.55f, 0.08f, 0.08f, 1f));
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new Vector4(0.75f, 0.12f, 0.12f, 1f));
+        ImGui.PushStyleColor(ImGuiCol.ButtonActive, new Vector4(0.40f, 0.05f, 0.05f, 1f));
+        var opened = ImGui.SmallButton("● Live DJ");
+        ImGui.PopStyleColor(3);
+        if (opened)
+            OpenUrl(venue.LiveDjUrl!);
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip(string.IsNullOrWhiteSpace(venue.LiveDjName)
+                ? "Open the live stream."
+                : $"Open {venue.LiveDjName}'s stream.");
+        ImGui.SameLine();
+        ImGui.TextDisabled($"{Math.Max(0, venue.LiveViewers)} viewers");
+    }
+
     private static void DrawSend(Plugin plugin, VenueListing venue, string label, string kind, bool canSend, bool inside, string? tip = null)
     {
         var action = kind == "door_locked"
@@ -250,7 +270,9 @@ internal static class VenueView
             ImGui.EndDisabled();
         if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
         {
-            if (kind == "unhosted")
+            if (plugin.Session.VenueHold(venue.Id) > TimeSpan.Zero)
+                ImGui.SetTooltip("Report cooldown due to plenty of audit support. The timer is the wait until the next report.");
+            else if (kind == "unhosted")
                 ImGui.SetTooltip("Door locked, or people here without a hosted scene. Staff and plot owner cannot be read from the client. Press twice. Does not replace Quiet Halls when the room is actually empty.");
             else if (!string.IsNullOrWhiteSpace(tip))
                 ImGui.SetTooltip(tip);

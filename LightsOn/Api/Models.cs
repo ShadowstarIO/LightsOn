@@ -22,6 +22,9 @@ public sealed class VenueListing
 
     [JsonIgnore] public OccupancySnapshot Occupancy { get; set; } = OccupancySnapshot.Unknown;
     [JsonIgnore] public string? PartakeUrl { get; set; }
+    [JsonIgnore] public string? LiveDjName { get; set; }
+    [JsonIgnore] public string? LiveDjUrl { get; set; }
+    [JsonIgnore] public int LiveViewers { get; set; }
     [JsonIgnore] public IReadOnlyList<GuestNote> Notes { get; set; } = [];
     [JsonIgnore] public IReadOnlyList<OccupancyEvent> Log { get; set; } = [];
 
@@ -118,6 +121,19 @@ public sealed class VenueListing
             return only.ToLocalTime().ToString("ddd h:mm tt");
         return "";
     }
+}
+
+public sealed class LiveFeed
+{
+    public List<LiveDj> Djs { get; set; } = [];
+}
+
+public sealed class LiveDj
+{
+    public string PlaceId { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Url { get; set; } = "";
+    public int Viewers { get; set; }
 }
 
 public sealed class PartakeFeed
